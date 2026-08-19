@@ -1,5 +1,16 @@
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { getApp, getApps, initializeApp } from 'firebase/app';
-import { getAuth } from 'firebase/auth';
+import {
+  Auth,
+  getAuth,
+  initializeAuth,
+} from 'firebase/auth';
+
+// Firebase 12 exposes this through its React Native runtime bundle,
+// but its general TypeScript definitions currently omit the export.
+// @ts-expect-error React Native runtime export is available through Metro.
+import { getReactNativePersistence } from 'firebase/auth';
+
 import { getFirestore } from 'firebase/firestore';
 
 const firebaseConfig = {
@@ -25,5 +36,15 @@ if (missingValues.length > 0) {
 export const firebaseApp =
   getApps().length > 0 ? getApp() : initializeApp(firebaseConfig);
 
-export const firebaseAuth = getAuth(firebaseApp);
+function createFirebaseAuth(): Auth {
+  try {
+    return initializeAuth(firebaseApp, {
+      persistence: getReactNativePersistence(AsyncStorage),
+    });
+  } catch {
+    return getAuth(firebaseApp);
+  }
+}
+
+export const firebaseAuth = createFirebaseAuth();
 export const firestore = getFirestore(firebaseApp);
