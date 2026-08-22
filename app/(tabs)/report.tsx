@@ -8,6 +8,7 @@ export default function ReportScreen() {
       icon="warning-outline"
       iconColor="#C25450"
       iconBackgroundColor="#FCECEB"
+      availability="Planned for a future Incident Reporting sprint."
     />
   );
 }

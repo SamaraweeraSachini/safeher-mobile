@@ -1,4 +1,8 @@
 import { Ionicons } from '@expo/vector-icons';
+import {
+  type Href,
+  useRouter,
+} from 'expo-router';
 import { useMemo } from 'react';
 import {
   Alert,
@@ -19,6 +23,7 @@ type FeatureCard = {
   icon: keyof typeof Ionicons.glyphMap;
   color: string;
   backgroundColor: string;
+  route: Href;
 };
 
 const FEATURES: FeatureCard[] = [
@@ -29,6 +34,7 @@ const FEATURES: FeatureCard[] = [
     icon: 'map-outline',
     color: '#16697A',
     backgroundColor: '#E4F4F7',
+    route: '/safety-map',
   },
   {
     id: 'report-incident',
@@ -37,6 +43,7 @@ const FEATURES: FeatureCard[] = [
     icon: 'warning-outline',
     color: '#C25450',
     backgroundColor: '#FCECEB',
+    route: '/report',
   },
   {
     id: 'safe-route',
@@ -45,6 +52,7 @@ const FEATURES: FeatureCard[] = [
     icon: 'navigate-outline',
     color: '#38785A',
     backgroundColor: '#E8F5ED',
+    route: '/safe-route',
   },
   {
     id: 'trusted-contacts',
@@ -53,6 +61,7 @@ const FEATURES: FeatureCard[] = [
     icon: 'people-outline',
     color: '#7957A8',
     backgroundColor: '#F1EAF9',
+    route: '/trusted-contacts',
   },
   {
     id: 'safe-journey',
@@ -61,6 +70,7 @@ const FEATURES: FeatureCard[] = [
     icon: 'walk-outline',
     color: '#B36A22',
     backgroundColor: '#FFF1DF',
+    route: '/journey',
   },
   {
     id: 'sos',
@@ -69,10 +79,12 @@ const FEATURES: FeatureCard[] = [
     icon: 'alert-circle-outline',
     color: '#FFFFFF',
     backgroundColor: '#C83B4D',
+    route: '/sos',
   },
 ];
 
 export default function HomeScreen() {
+  const router = useRouter();
   const { user, isGuest } = useAuth();
 
   const displayName = useMemo(() => {
@@ -92,11 +104,7 @@ export default function HomeScreen() {
   }, [isGuest, user]);
 
   const handleFeaturePress = (feature: FeatureCard) => {
-    Alert.alert(
-      feature.title,
-      `${feature.title} will be available from this Home screen.`,
-      [{ text: 'OK' }]
-    );
+    router.push(feature.route);
   };
 
   return (
@@ -139,7 +147,9 @@ export default function HomeScreen() {
         </View>
 
         <View style={styles.welcomeSection}>
-          <Text style={styles.greeting}>Hello, {displayName} 👋</Text>
+          <Text style={styles.greeting}>
+            Hello, {displayName} 👋
+          </Text>
 
           <Text style={styles.welcomeText}>
             Where would you like to go safely today?
@@ -156,7 +166,9 @@ export default function HomeScreen() {
           </View>
 
           <View style={styles.safetyTextContainer}>
-            <Text style={styles.safetyTitle}>Your safety matters</Text>
+            <Text style={styles.safetyTitle}>
+              Your safety matters
+            </Text>
 
             <Text style={styles.safetyDescription}>
               Stay aware, trust your instincts and keep your trusted
@@ -166,7 +178,9 @@ export default function HomeScreen() {
         </View>
 
         <View style={styles.sectionHeader}>
-          <Text style={styles.sectionTitle}>Safety Features</Text>
+          <Text style={styles.sectionTitle}>
+            Safety Features
+          </Text>
 
           <Text style={styles.sectionSubtitle}>
             Choose a service to continue
@@ -191,7 +205,7 @@ export default function HomeScreen() {
                 onPress={() => handleFeaturePress(feature)}
                 accessibilityRole="button"
                 accessibilityLabel={feature.title}
-                accessibilityHint={feature.description}
+                accessibilityHint={`Open the ${feature.title} screen`}
               >
                 <View
                   style={[

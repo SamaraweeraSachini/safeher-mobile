@@ -119,6 +119,27 @@ export default function TabLayout() {
       />
 
       <Tabs.Screen
+        name="safe-route"
+        options={{
+          href: null,
+        }}
+      />
+
+      <Tabs.Screen
+        name="trusted-contacts"
+        options={{
+          href: null,
+        }}
+      />
+
+      <Tabs.Screen
+        name="sos"
+        options={{
+          href: null,
+        }}
+      />
+
+      <Tabs.Screen
         name="explore"
         options={{
           href: null,
