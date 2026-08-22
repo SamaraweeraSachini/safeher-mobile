@@ -1,12 +1,15 @@
 import { FirebaseError } from 'firebase/app';
+
 import {
   createUserWithEmailAndPassword,
   deleteUser,
+  signInAnonymously,
   signInWithEmailAndPassword,
   updateProfile,
   User,
   UserCredential,
 } from 'firebase/auth';
+
 import {
   doc,
   serverTimestamp,
@@ -110,6 +113,10 @@ export async function loginUser(
   );
 }
 
+export async function loginAsGuest(): Promise<UserCredential> {
+  return signInAnonymously(firebaseAuth);
+}
+
 export function getAuthenticationError(
   error: unknown
 ): string {
@@ -144,7 +151,7 @@ export function getAuthenticationError(
       return 'Unable to connect. Please check your internet connection.';
 
     case 'auth/operation-not-allowed':
-      return 'Email and password login is not enabled for this application.';
+      return 'This sign-in method is not enabled for this application.';
 
     default:
       return 'Authentication failed. Please try again.';
