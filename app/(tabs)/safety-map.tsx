@@ -8,6 +8,7 @@ export default function SafetyMapScreen() {
       icon="map-outline"
       iconColor="#16697A"
       iconBackgroundColor="#E4F4F7"
+      availability="Planned for a future Safety Map sprint."
     />
   );
 }

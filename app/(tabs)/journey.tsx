@@ -8,6 +8,7 @@ export default function JourneyScreen() {
       icon="navigate-outline"
       iconColor="#38785A"
       iconBackgroundColor="#E8F5ED"
+      availability="Planned for a future Safe Journey sprint."
     />
   );
 }
