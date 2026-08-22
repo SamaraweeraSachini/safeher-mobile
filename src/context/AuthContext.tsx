@@ -1,8 +1,4 @@
-import {
-  onAuthStateChanged,
-  User,
-} from 'firebase/auth';
-
+import { onAuthStateChanged, User } from 'firebase/auth';
 import {
   createContext,
   ReactNode,
@@ -13,6 +9,7 @@ import {
 } from 'react';
 
 import { firebaseAuth } from '@/src/config/firebase';
+import { loginAsGuest } from '@/src/services/auth-service';
 
 type AuthContextType = {
   user: User | null;
@@ -20,12 +17,12 @@ type AuthContextType = {
   isAuthenticated: boolean;
   isGuest: boolean;
   isRegisteredUser: boolean;
+  continueAsGuest: () => Promise<void>;
 };
 
-const AuthContext =
-  createContext<AuthContextType | undefined>(
-    undefined
-  );
+const AuthContext = createContext<AuthContextType | undefined>(
+  undefined
+);
 
 type AuthProviderProps = {
   children: ReactNode;
@@ -34,24 +31,25 @@ type AuthProviderProps = {
 export function AuthProvider({
   children,
 }: AuthProviderProps) {
-  const [user, setUser] =
-    useState<User | null>(null);
+  const [user, setUser] = useState<User | null>(null);
 
-  const [loading, setLoading] =
-    useState(true);
+  const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    const unsubscribe =
-      onAuthStateChanged(
-        firebaseAuth,
-        firebaseUser => {
-          setUser(firebaseUser);
-          setLoading(false);
-        }
-      );
+    const unsubscribe = onAuthStateChanged(
+      firebaseAuth,
+      firebaseUser => {
+        setUser(firebaseUser);
+        setLoading(false);
+      }
+    );
 
     return unsubscribe;
   }, []);
+
+  const continueAsGuest = async () => {
+    await loginAsGuest();
+  };
 
   const value = useMemo(
     () => ({
@@ -59,34 +57,28 @@ export function AuthProvider({
 
       loading,
 
-      isAuthenticated:
-        user !== null,
+      isAuthenticated: user !== null,
 
-      isGuest:
-        user?.isAnonymous === true,
+      isGuest: user?.isAnonymous === true,
 
       isRegisteredUser:
         user !== null &&
         user.isAnonymous === false,
+
+      continueAsGuest,
     }),
-    [
-      user,
-      loading,
-    ]
+    [user, loading]
   );
 
   return (
-    <AuthContext.Provider
-      value={value}
-    >
+    <AuthContext.Provider value={value}>
       {children}
     </AuthContext.Provider>
   );
 }
 
 export function useAuth() {
-  const context =
-    useContext(AuthContext);
+  const context = useContext(AuthContext);
 
   if (!context) {
     throw new Error(
