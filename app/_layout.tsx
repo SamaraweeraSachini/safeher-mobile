@@ -56,13 +56,13 @@ function RootNavigator() {
           headerShown: false,
         }}
       >
+        <Stack.Screen
+          name="splash"
+        />
+
         <Stack.Protected
           guard={!isAuthenticated}
         >
-          <Stack.Screen
-            name="splash"
-          />
-
           <Stack.Screen
             name="(auth)"
           />
