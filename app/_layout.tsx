@@ -3,37 +3,97 @@ import {
   DefaultTheme,
   ThemeProvider,
 } from '@react-navigation/native';
+
 import { Stack } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
-import 'react-native-reanimated';
+
+import {
+  ActivityIndicator,
+  StyleSheet,
+  View,
+} from 'react-native';
 
 import { useColorScheme } from '@/hooks/use-color-scheme';
 
-export const unstable_settings = {
-  anchor: '(tabs)',
-};
+import {
+  AuthProvider,
+  useAuth,
+} from '@/src/context/AuthContext';
 
-export default function RootLayout() {
+function RootNavigator() {
   const colorScheme = useColorScheme();
+
+  const {
+    isAuthenticated,
+    loading,
+  } = useAuth();
+
+  if (loading) {
+    return (
+      <View style={styles.loadingContainer}>
+        <ActivityIndicator
+          size="large"
+          color="#C43D74"
+        />
+      </View>
+    );
+  }
 
   return (
     <ThemeProvider
-      value={colorScheme === 'dark' ? DarkTheme : DefaultTheme}
+      value={
+        colorScheme === 'dark'
+          ? DarkTheme
+          : DefaultTheme
+      }
     >
-      <Stack screenOptions={{ headerShown: false }}>
-        <Stack.Screen name="(auth)" />
-        <Stack.Screen name="(tabs)" />
-        <Stack.Screen
-          name="modal"
-          options={{
-            headerShown: true,
-            presentation: 'modal',
-            title: 'Modal',
-          }}
-        />
+      <Stack
+        screenOptions={{
+          headerShown: false,
+        }}
+      >
+        <Stack.Protected
+          guard={!isAuthenticated}
+        >
+          <Stack.Screen
+            name="(auth)"
+          />
+        </Stack.Protected>
+
+        <Stack.Protected
+          guard={isAuthenticated}
+        >
+          <Stack.Screen
+            name="(tabs)"
+          />
+
+          <Stack.Screen
+            name="modal"
+            options={{
+              presentation: 'modal',
+            }}
+          />
+        </Stack.Protected>
       </Stack>
 
-      <StatusBar style="dark" />
+      <StatusBar style="auto" />
     </ThemeProvider>
   );
 }
+
+export default function RootLayout() {
+  return (
+    <AuthProvider>
+      <RootNavigator />
+    </AuthProvider>
+  );
+}
+
+const styles = StyleSheet.create({
+  loadingContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    backgroundColor: '#FFF8FB',
+  },
+});
