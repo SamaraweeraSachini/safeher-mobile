@@ -6,7 +6,6 @@ import {
 
 import { Stack } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
-
 import {
   ActivityIndicator,
   StyleSheet,
@@ -14,7 +13,6 @@ import {
 } from 'react-native';
 
 import { useColorScheme } from '@/hooks/use-color-scheme';
-
 import {
   AuthProvider,
   useAuth,
@@ -56,24 +54,18 @@ function RootNavigator() {
           headerShown: false,
         }}
       >
-        <Stack.Screen
-          name="splash"
-        />
+        <Stack.Screen name="splash" />
 
-        <Stack.Protected
-          guard={!isAuthenticated}
-        >
-          <Stack.Screen
-            name="(auth)"
-          />
+        <Stack.Protected guard={!isAuthenticated}>
+          <Stack.Screen name="welcome" />
+
+          <Stack.Screen name="(onboarding)" />
+
+          <Stack.Screen name="(auth)" />
         </Stack.Protected>
 
-        <Stack.Protected
-          guard={isAuthenticated}
-        >
-          <Stack.Screen
-            name="(tabs)"
-          />
+        <Stack.Protected guard={isAuthenticated}>
+          <Stack.Screen name="(tabs)" />
 
           <Stack.Screen
             name="modal"
@@ -105,3 +97,4 @@ const styles = StyleSheet.create({
     backgroundColor: '#FFF8FB',
   },
 });
+

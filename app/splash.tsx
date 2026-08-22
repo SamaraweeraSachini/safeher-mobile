@@ -1,3 +1,7 @@
+import { Ionicons } from '@expo/vector-icons';
+import { LinearGradient } from 'expo-linear-gradient';
+import { useRouter } from 'expo-router';
+import { StatusBar } from 'expo-status-bar';
 import { useEffect, useRef } from 'react';
 import {
   Pressable,
@@ -5,10 +9,8 @@ import {
   Text,
   View,
 } from 'react-native';
-import { LinearGradient } from 'expo-linear-gradient';
-import { useRouter } from 'expo-router';
-import { StatusBar } from 'expo-status-bar';
-import { Ionicons } from '@expo/vector-icons';
+
+import { useAuth } from '@/src/context/AuthContext';
 
 const SPLASH_DURATION = 2200;
 
@@ -16,13 +18,15 @@ export default function SplashScreen() {
   const router = useRouter();
   const hasNavigated = useRef(false);
 
+  const { isAuthenticated } = useAuth();
+
   useEffect(() => {
     const timer = setTimeout(() => {
       continueToApp();
     }, SPLASH_DURATION);
 
     return () => clearTimeout(timer);
-  }, []);
+  }, [isAuthenticated]);
 
   function continueToApp() {
     if (hasNavigated.current) {
@@ -31,7 +35,11 @@ export default function SplashScreen() {
 
     hasNavigated.current = true;
 
-    router.replace('/(tabs)');
+    if (isAuthenticated) {
+      router.replace('/(tabs)');
+    } else {
+      router.replace('/welcome');
+    }
   }
 
   return (
@@ -44,7 +52,11 @@ export default function SplashScreen() {
       <StatusBar style="light" />
 
       <LinearGradient
-        colors={['#4E1026', '#7A1F3D', '#C45C7A']}
+        colors={[
+          '#4E1026',
+          '#7A1F3D',
+          '#C45C7A',
+        ]}
         style={styles.container}
       >
         <View style={styles.content}>
@@ -58,10 +70,13 @@ export default function SplashScreen() {
             </View>
           </View>
 
-          <Text style={styles.appName}>SafeHer</Text>
+          <Text style={styles.appName}>
+            SafeHer
+          </Text>
 
           <Text style={styles.message}>
-            You deserve to feel safe — every step of the way.
+            You deserve to feel safe — every
+            step of the way.
           </Text>
         </View>
 
@@ -89,7 +104,8 @@ const styles = StyleSheet.create({
     width: 120,
     height: 120,
     borderRadius: 60,
-    backgroundColor: 'rgba(255,255,255,0.18)',
+    backgroundColor:
+      'rgba(255,255,255,0.18)',
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -127,3 +143,4 @@ const styles = StyleSheet.create({
     textAlign: 'center',
   },
 });
+
