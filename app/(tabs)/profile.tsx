@@ -11,12 +11,14 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
+import LogoutButton from '@/src/components/auth/LogoutButton';
 import { useAuth } from '@/src/context/AuthContext';
 import type { SafeHerUserProfile } from '@/src/services/auth-service';
 import { getUserProfile } from '@/src/services/profile-service';
 
 export default function ProfileScreen() {
   const router = useRouter();
+
   const {
     user,
     isGuest,
@@ -158,12 +160,18 @@ export default function ProfileScreen() {
 
         <View style={styles.profileCard}>
           <View style={styles.avatar}>
-            <Text style={styles.avatarText}>{initials}</Text>
+            <Text style={styles.avatarText}>
+              {initials}
+            </Text>
           </View>
 
-          <Text style={styles.displayName}>{displayName}</Text>
+          <Text style={styles.displayName}>
+            {displayName}
+          </Text>
 
-          <Text style={styles.displayEmail}>{displayEmail}</Text>
+          <Text style={styles.displayEmail}>
+            {displayEmail}
+          </Text>
 
           <View
             style={[
@@ -224,7 +232,9 @@ export default function ProfileScreen() {
               color="#B42318"
             />
 
-            <Text style={styles.errorText}>{profileError}</Text>
+            <Text style={styles.errorText}>
+              {profileError}
+            </Text>
           </View>
         )}
 
@@ -287,27 +297,34 @@ export default function ProfileScreen() {
             Account actions
           </Text>
 
-          <View style={styles.logoutSpace}>
-            <View style={styles.logoutIcon}>
-              <Ionicons
-                name="log-out-outline"
-                size={23}
-                color="#A92F61"
-              />
+          <View style={styles.logoutCard}>
+            <View style={styles.logoutHeader}>
+              <View style={styles.logoutIcon}>
+                <Ionicons
+                  name="log-out-outline"
+                  size={23}
+                  color="#A92F61"
+                />
+              </View>
+
+              <View style={styles.logoutTextContainer}>
+                <Text style={styles.logoutTitle}>
+                  Ready to leave?
+                </Text>
+
+                <Text style={styles.logoutDescription}>
+                  You will need to log in or continue as a guest to
+                  access SafeHer again.
+                </Text>
+              </View>
             </View>
 
-            <View style={styles.logoutTextContainer}>
-              <Text style={styles.logoutTitle}>Logout</Text>
-
-              <Text style={styles.logoutDescription}>
-                Logout will be connected in the next account task.
-              </Text>
-            </View>
+            <LogoutButton />
           </View>
         </View>
 
         <Text style={styles.footerText}>
-          SafeHer • Supporting safer journeys together
+          SafeHer - Supporting safer journeys together
         </Text>
       </ScrollView>
     </SafeAreaView>
@@ -336,9 +353,13 @@ function InformationRow({
       </View>
 
       <View style={styles.rowTextContainer}>
-        <Text style={styles.rowLabel}>{label}</Text>
+        <Text style={styles.rowLabel}>
+          {label}
+        </Text>
 
-        <Text style={styles.rowValue}>{value}</Text>
+        <Text style={styles.rowValue}>
+          {value}
+        </Text>
       </View>
     </View>
   );
@@ -377,7 +398,9 @@ function OptionRow({
       </View>
 
       <View style={styles.rowTextContainer}>
-        <Text style={styles.optionTitle}>{title}</Text>
+        <Text style={styles.optionTitle}>
+          {title}
+        </Text>
 
         <Text style={styles.optionDescription}>
           {description}
@@ -669,16 +692,17 @@ const styles = StyleSheet.create({
     lineHeight: 17,
   },
 
-  logoutSpace: {
-    minHeight: 82,
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingHorizontal: 16,
+  logoutCard: {
+    padding: 16,
     borderWidth: 1,
-    borderStyle: 'dashed',
     borderColor: '#E5B8CA',
     borderRadius: 20,
     backgroundColor: '#FFF0F5',
+  },
+
+  logoutHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
   },
 
   logoutIcon: {
