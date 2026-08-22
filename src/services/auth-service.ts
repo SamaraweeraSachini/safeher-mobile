@@ -5,6 +5,7 @@ import {
   deleteUser,
   signInAnonymously,
   signInWithEmailAndPassword,
+  signOut,
   updateProfile,
   User,
   UserCredential,
@@ -115,6 +116,10 @@ export async function loginUser(
 
 export async function loginAsGuest(): Promise<UserCredential> {
   return signInAnonymously(firebaseAuth);
+}
+
+export async function logoutUser(): Promise<void> {
+  await signOut(firebaseAuth);
 }
 
 export function getAuthenticationError(
