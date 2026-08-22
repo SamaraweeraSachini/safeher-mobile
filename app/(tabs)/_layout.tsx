@@ -140,6 +140,21 @@ export default function TabLayout() {
       />
 
       <Tabs.Screen
+  name="privacy-safety"
+  options={{
+    href: null,
+  }}
+/>
+
+<Tabs.Screen
+  name="reporting-guidelines"
+  options={{
+    href: null,
+  }}
+/>
+
+
+      <Tabs.Screen
         name="explore"
         options={{
           href: null,
