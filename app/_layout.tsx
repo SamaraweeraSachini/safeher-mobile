@@ -20,6 +20,10 @@ import {
   useAuth,
 } from '@/src/context/AuthContext';
 
+export const unstable_settings = {
+  initialRouteName: 'splash',
+};
+
 function RootNavigator() {
   const colorScheme = useColorScheme();
 
@@ -52,6 +56,10 @@ function RootNavigator() {
           headerShown: false,
         }}
       >
+        <Stack.Screen
+          name="splash"
+        />
+
         <Stack.Protected
           guard={!isAuthenticated}
         >
