@@ -198,6 +198,15 @@ export default function TabLayout() {
       />
 
       <Tabs.Screen
+  name="report-confirmation"
+  options={{
+    href: null,
+  }}
+/>
+
+
+
+      <Tabs.Screen
         name="recent-incidents"
         options={{
           href: null,
