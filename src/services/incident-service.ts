@@ -9,7 +9,10 @@ import {
   where,
 } from 'firebase/firestore';
 
-import { isIncidentCategoryId } from '@/constants/incident-categories';
+import {
+  isIncidentCategoryId,
+} from '@/constants/incident-categories';
+
 import {
   firebaseAuth,
   firestore,
@@ -72,7 +75,12 @@ function validateCoordinates(
   latitude: number,
   longitude: number
 ): void {
-  if (!coordinatesAreValid(latitude, longitude)) {
+  if (
+    !coordinatesAreValid(
+      latitude,
+      longitude
+    )
+  ) {
     throw new IncidentSubmissionError(
       'invalid-location',
       'The selected incident location is invalid. Please select your current location again.'
@@ -112,15 +120,21 @@ function convertCoordinates(
   }
 
   return {
-    latitude: coordinates.latitude,
-    longitude: coordinates.longitude,
+    latitude:
+      coordinates.latitude,
+
+    longitude:
+      coordinates.longitude,
   };
 }
 
 function convertCreatedAt(
   value: unknown
 ): Timestamp | null | undefined {
-  if (value === null || value === undefined) {
+  if (
+    value === null ||
+    value === undefined
+  ) {
     return null;
   }
 
@@ -132,8 +146,7 @@ function convertCreatedAt(
 }
 
 /**
- * Converts an unknown Firestore document into the shared Incident model.
- *
+ * Converts unknown Firestore data into the shared Incident model.
  * Invalid documents return null instead of crashing the application.
  */
 export function convertIncidentDocument(
@@ -148,7 +161,11 @@ export function convertIncidentDocument(
     return null;
   }
 
-  if (!isIncidentCategoryId(data.type)) {
+  if (
+    !isIncidentCategoryId(
+      data.type
+    )
+  ) {
     console.warn(
       `Incident ${id} was ignored because its type is unsupported.`
     );
@@ -164,7 +181,10 @@ export function convertIncidentDocument(
     return null;
   }
 
-  if (typeof data.description !== 'string') {
+  if (
+    typeof data.description !==
+    'string'
+  ) {
     console.warn(
       `Incident ${id} was ignored because its description is invalid.`
     );
@@ -172,9 +192,10 @@ export function convertIncidentDocument(
     return null;
   }
 
-  const coordinates = convertCoordinates(
-    data.coordinates
-  );
+  const coordinates =
+    convertCoordinates(
+      data.coordinates
+    );
 
   if (!coordinates) {
     console.warn(
@@ -184,7 +205,10 @@ export function convertIncidentDocument(
     return null;
   }
 
-  if (typeof data.anonymous !== 'boolean') {
+  if (
+    typeof data.anonymous !==
+    'boolean'
+  ) {
     console.warn(
       `Incident ${id} was ignored because its anonymous value is invalid.`
     );
@@ -203,9 +227,10 @@ export function convertIncidentDocument(
     return null;
   }
 
-  const createdAt = convertCreatedAt(
-    data.createdAt
-  );
+  const createdAt =
+    convertCreatedAt(
+      data.createdAt
+    );
 
   if (createdAt === undefined) {
     console.warn(
@@ -218,11 +243,14 @@ export function convertIncidentDocument(
   return {
     id,
     type: data.type,
-    description: data.description.trim(),
+    description:
+      data.description.trim(),
     coordinates,
-    anonymous: data.anonymous,
+    anonymous:
+      data.anonymous,
     status: 'active',
-    creatorUid: data.creatorUid,
+    creatorUid:
+      data.creatorUid,
     createdAt,
   };
 }
@@ -232,65 +260,123 @@ function sortIncidentsByNewest(
   secondIncident: Incident
 ): number {
   const firstTime =
-    firstIncident.createdAt?.toMillis() ?? 0;
+    firstIncident.createdAt
+      ?.toMillis() ?? 0;
 
   const secondTime =
-    secondIncident.createdAt?.toMillis() ?? 0;
+    secondIncident.createdAt
+      ?.toMillis() ?? 0;
 
   return secondTime - firstTime;
 }
 
 /**
- * Subscribes to active Firestore incidents in real time.
+ * Removes duplicate incident objects using the Firestore document ID.
+ * The newest version of a duplicated document is retained.
+ */
+function removeDuplicateIncidents(
+  incidents: Incident[]
+): Incident[] {
+  const incidentsById =
+    new Map<string, Incident>();
+
+  incidents.forEach(incident => {
+    incidentsById.set(
+      incident.id,
+      incident
+    );
+  });
+
+  return Array.from(
+    incidentsById.values()
+  );
+}
+
+/**
+ * Subscribes to active incidents through a Firestore real-time listener.
  *
- * The returned function must be called when the consuming component unmounts.
+ * Firestore sends a complete query snapshot whenever an active incident is
+ * added, changed or removed. Returning the unsubscribe function allows the
+ * React hook to clean up the listener when its screen unmounts.
  */
 export function subscribeToActiveIncidents(
-  onIncidentsChanged: (incidents: Incident[]) => void,
-  onError: (error: IncidentRetrievalError) => void
+  onIncidentsChanged: (
+    incidents: Incident[]
+  ) => void,
+
+  onError: (
+    error: IncidentRetrievalError
+  ) => void
 ): Unsubscribe {
-  const incidentsReference = collection(
-    firestore,
-    'incidents'
-  );
+  const incidentsReference =
+    collection(
+      firestore,
+      'incidents'
+    );
 
-  const activeIncidentsQuery = query(
-    incidentsReference,
-    where('status', '==', 'active')
-  );
+  const activeIncidentsQuery =
+    query(
+      incidentsReference,
+      where(
+        'status',
+        '==',
+        'active'
+      )
+    );
 
-  return onSnapshot(
-    activeIncidentsQuery,
-    snapshot => {
-      const activeIncidents = snapshot.docs
-        .map(documentSnapshot =>
-          convertIncidentDocument(
-            documentSnapshot.id,
-            documentSnapshot.data()
+  const unsubscribe =
+    onSnapshot(
+      activeIncidentsQuery,
+
+      snapshot => {
+        const convertedIncidents =
+          snapshot.docs
+            .map(
+              documentSnapshot =>
+                convertIncidentDocument(
+                  documentSnapshot.id,
+                  documentSnapshot.data()
+                )
+            )
+            .filter(
+              (
+                incident
+              ): incident is Incident =>
+                incident !== null
+            );
+
+        const activeIncidents =
+          removeDuplicateIncidents(
+            convertedIncidents
           )
-        )
-        .filter(
-          (incident): incident is Incident =>
-            incident !== null
-        )
-        .sort(sortIncidentsByNewest)
-        .slice(0, ACTIVE_INCIDENT_LIMIT);
+            .sort(
+              sortIncidentsByNewest
+            )
+            .slice(
+              0,
+              ACTIVE_INCIDENT_LIMIT
+            );
 
-      onIncidentsChanged(activeIncidents);
-    },
-    error => {
-      console.error(
-        'Active incident retrieval error:',
-        error
-      );
+        onIncidentsChanged(
+          activeIncidents
+        );
+      },
 
-      onError(
-        new IncidentRetrievalError(
-          'SafeHer could not load active incidents. Check your internet connection and try again.'
-        )
-      );
-    }
-  );
+      error => {
+        console.error(
+          'Active incident real-time listener error:',
+          error
+        );
+
+        onError(
+          new IncidentRetrievalError(
+            'SafeHer lost its real-time incident connection. Check your internet connection and try again.'
+          )
+        );
+      }
+    );
+
+  return unsubscribe;
 }
 
 export async function createIncidentReport(
@@ -303,7 +389,8 @@ export async function createIncidentReport(
     );
   }
 
-  const currentUser = firebaseAuth.currentUser;
+  const currentUser =
+    firebaseAuth.currentUser;
 
   if (!currentUser) {
     throw new IncidentSubmissionError(
@@ -320,41 +407,48 @@ export async function createIncidentReport(
   submissionInProgress = true;
 
   try {
-    const incidentReference = await addDoc(
-      collection(
-        firestore,
-        'incidents'
-      ),
-      {
-        type: input.type,
+    const incidentReference =
+      await addDoc(
+        collection(
+          firestore,
+          'incidents'
+        ),
+        {
+          type:
+            input.type,
 
-        description:
-          input.description.trim(),
+          description:
+            input.description.trim(),
 
-        coordinates: {
-          latitude:
-            input.coordinates.latitude,
+          coordinates: {
+            latitude:
+              input.coordinates
+                .latitude,
 
-          longitude:
-            input.coordinates.longitude,
-        },
+            longitude:
+              input.coordinates
+                .longitude,
+          },
 
-        anonymous: input.anonymous,
+          anonymous:
+            input.anonymous,
 
-        status: 'active',
+          status:
+            'active',
 
-        creatorUid:
-          currentUser.uid,
+          creatorUid:
+            currentUser.uid,
 
-        createdAt:
-          serverTimestamp(),
-      }
-    );
+          createdAt:
+            serverTimestamp(),
+        }
+      );
 
     return incidentReference.id;
   } catch (error) {
     if (
-      error instanceof IncidentSubmissionError
+      error instanceof
+      IncidentSubmissionError
     ) {
       throw error;
     }
