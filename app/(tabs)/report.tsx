@@ -18,6 +18,10 @@ import {
 
 import { Brand } from "@/constants/brand";
 import { INCIDENT_CATEGORIES } from "@/constants/incident-categories";
+import {
+  createIncidentReport,
+  IncidentSubmissionError,
+} from "@/src/services/incident-service";
 import type {
   IncidentCategoryId,
   IncidentCoordinates,
@@ -251,7 +255,11 @@ export default function ReportScreen() {
     );
   };
 
-  const handleSubmit = () => {
+  const handleSubmit = async () => {
+    if (isSubmitting) {
+      return;
+    }
+
     if (!validateForm()) {
       Alert.alert(
         "Check your report",
@@ -261,16 +269,65 @@ export default function ReportScreen() {
       return;
     }
 
+    if (
+      !selectedCategory ||
+      !incidentLocation
+    ) {
+      return;
+    }
+
     setIsSubmitting(true);
 
-    setTimeout(() => {
-      setIsSubmitting(false);
+    try {
+      await createIncidentReport({
+        type: selectedCategory,
+
+        description,
+
+        coordinates: {
+          latitude:
+            incidentLocation.latitude,
+
+          longitude:
+            incidentLocation.longitude,
+        },
+
+        anonymous:
+          reportAnonymously,
+      });
+
+      resetForm();
 
       Alert.alert(
-        "Report information is valid",
-        "Your report passed validation. Firestore submission will be connected in SAFE-63.",
+        "Report submitted",
+        "Your incident report was successfully saved. Thank you for helping make the community safer."
       );
-    }, 500);
+    } catch (error) {
+      const errorMessage =
+        error instanceof
+        IncidentSubmissionError
+          ? error.message
+          : "SafeHer could not submit your incident report. Please try again.";
+
+      Alert.alert(
+        "Submission failed",
+        errorMessage,
+        [
+          {
+            text: "Cancel",
+            style: "cancel",
+          },
+          {
+            text: "Try Again",
+            onPress: () => {
+              void handleSubmit();
+            },
+          },
+        ]
+      );
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
   const hasErrors = Object.keys(errors).length > 0;
