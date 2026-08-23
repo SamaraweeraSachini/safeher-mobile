@@ -47,4 +47,5 @@ function createFirebaseAuth(): Auth {
 }
 
 export const firebaseAuth = createFirebaseAuth();
+
 export const firestore = getFirestore(firebaseApp);
