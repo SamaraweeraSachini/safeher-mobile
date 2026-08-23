@@ -268,10 +268,7 @@ export default function ReportScreen() {
       return;
     }
 
-    if (
-      !selectedCategory ||
-      !incidentLocation
-    ) {
+    if (!selectedCategory || !incidentLocation) {
       return;
     }
 
@@ -284,46 +281,36 @@ export default function ReportScreen() {
         description,
 
         coordinates: {
-          latitude:
-            incidentLocation.latitude,
-
-          longitude:
-            incidentLocation.longitude,
+          latitude: incidentLocation.latitude,
+          longitude: incidentLocation.longitude,
         },
 
-        anonymous:
-          reportAnonymously,
+        anonymous: reportAnonymously,
       });
 
+      // SAFE-73:
+      // Only reset and navigate after the Firestore submission succeeds.
       resetForm();
 
-      Alert.alert(
-        "Report submitted",
-        "Your incident report was successfully saved. Thank you for helping make the community safer."
-      );
+      router.push("/report-confirmation" as any);
     } catch (error) {
       const errorMessage =
-        error instanceof
-        IncidentSubmissionError
+        error instanceof IncidentSubmissionError
           ? error.message
           : "SafeHer could not submit your incident report. Please try again.";
 
-      Alert.alert(
-        "Submission failed",
-        errorMessage,
-        [
-          {
-            text: "Cancel",
-            style: "cancel",
+      Alert.alert("Submission failed", errorMessage, [
+        {
+          text: "Cancel",
+          style: "cancel",
+        },
+        {
+          text: "Try Again",
+          onPress: () => {
+            void handleSubmit();
           },
-          {
-            text: "Try Again",
-            onPress: () => {
-              void handleSubmit();
-            },
-          },
-        ]
-      );
+        },
+      ]);
     } finally {
       setIsSubmitting(false);
     }
@@ -422,8 +409,8 @@ export default function ReportScreen() {
             />
 
             <Text style={styles.errorSummaryText}>
-              Some required information is missing. Check the highlighted fields
-              below.
+              Some required information is missing. Check the highlighted
+              fields below.
             </Text>
           </View>
         ) : null}
@@ -544,10 +531,7 @@ export default function ReportScreen() {
           <View style={styles.descriptionFooter}>
             <View style={styles.descriptionErrorContainer}>
               {errors.description ? (
-                <ErrorMessage
-                  message={errors.description}
-                  compact
-                />
+                <ErrorMessage message={errors.description} compact />
               ) : null}
             </View>
 
@@ -613,9 +597,7 @@ export default function ReportScreen() {
                   }
                   size={23}
                   color={
-                    incidentLocation
-                      ? Brand.white
-                      : Brand.burgundy
+                    incidentLocation ? Brand.white : Brand.burgundy
                   }
                 />
               )}
@@ -650,9 +632,7 @@ export default function ReportScreen() {
                 }
                 size={20}
                 color={
-                  incidentLocation
-                    ? Brand.burgundy
-                    : Brand.muted
+                  incidentLocation ? Brand.burgundy : Brand.muted
                 }
               />
             ) : null}
@@ -667,7 +647,8 @@ export default function ReportScreen() {
               />
 
               <Text style={styles.locationConfirmationText}>
-                Your current coordinates were successfully added to this report.
+                Your current coordinates were successfully added to this
+                report.
               </Text>
             </View>
           ) : null}
@@ -741,9 +722,7 @@ export default function ReportScreen() {
               true: Brand.roseSoft,
             }}
             thumbColor={
-              reportAnonymously
-                ? Brand.burgundy
-                : Brand.white
+              reportAnonymously ? Brand.burgundy : Brand.white
             }
             accessibilityLabel="Report anonymously"
           />
@@ -789,9 +768,7 @@ export default function ReportScreen() {
               accessibilityRole="link"
               disabled={isSubmitting}
               onPress={() => {
-                router.push(
-                  "/(tabs)/reporting-guidelines",
-                );
+                router.push("/(tabs)/reporting-guidelines");
               }}
             >
               <Text style={styles.guidelinesLink}>
