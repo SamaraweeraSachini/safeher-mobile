@@ -1,28 +1,21 @@
 import { Ionicons } from '@expo/vector-icons';
-import {
-    memo,
-} from 'react';
+import { memo } from 'react';
 import {
     StyleSheet,
-    Text,
     View,
 } from 'react-native';
-import {
-    Callout,
-    Marker,
-} from 'react-native-maps';
+import { Marker } from 'react-native-maps';
 
 import {
     getIncidentCategory,
     getIncidentCategoryLabel,
 } from '@/constants/incident-categories';
 
-import type {
-    Incident,
-} from '@/src/types/incident';
+import type { Incident } from '@/src/types/incident';
 
 type IncidentMapMarkerProps = {
   incident: Incident;
+  onPress: (incident: Incident) => void;
 };
 
 function coordinatesAreValid(
@@ -41,6 +34,7 @@ function coordinatesAreValid(
 
 function IncidentMapMarker({
   incident,
+  onPress,
 }: IncidentMapMarkerProps) {
   const {
     latitude,
@@ -88,18 +82,14 @@ function IncidentMapMarker({
         latitude,
         longitude,
       }}
-      title={categoryLabel}
-      description={
-        incident.description ||
-        'No description provided.'
-      }
       anchor={{
         x: 0.5,
         y: 0.5,
       }}
       tracksViewChanges={false}
+      onPress={() => onPress(incident)}
       accessibilityLabel={`${categoryLabel} incident marker`}
-      accessibilityHint="Opens information about this incident"
+      accessibilityHint="Opens safe public information about this incident"
     >
       <View
         style={[
@@ -127,53 +117,6 @@ function IncidentMapMarker({
           />
         </View>
       </View>
-
-      <Callout tooltip={false}>
-        <View style={styles.callout}>
-          <View style={styles.calloutHeader}>
-            <View
-              style={[
-                styles.calloutIcon,
-                {
-                  backgroundColor:
-                    markerBackground,
-                },
-              ]}
-            >
-              <Ionicons
-                name={markerIcon}
-                size={18}
-                color={markerColor}
-              />
-            </View>
-
-            <View style={styles.calloutTitleArea}>
-              <Text
-                style={styles.calloutTitle}
-                numberOfLines={1}
-              >
-                {categoryLabel}
-              </Text>
-
-              <Text style={styles.activeText}>
-                Active incident
-              </Text>
-            </View>
-          </View>
-
-          <Text
-            style={styles.calloutDescription}
-            numberOfLines={3}
-          >
-            {incident.description ||
-              'No description provided.'}
-          </Text>
-
-          <Text style={styles.calloutLocation}>
-            {latitude.toFixed(5)}, {longitude.toFixed(5)}
-          </Text>
-        </View>
-      </Callout>
     </Marker>
   );
 }
@@ -204,55 +147,5 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     borderRadius: 16,
-  },
-
-  callout: {
-    width: 240,
-    paddingVertical: 7,
-    paddingHorizontal: 4,
-  },
-
-  calloutHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-  },
-
-  calloutIcon: {
-    width: 36,
-    height: 36,
-    alignItems: 'center',
-    justifyContent: 'center',
-    borderRadius: 12,
-  },
-
-  calloutTitleArea: {
-    flex: 1,
-    marginLeft: 10,
-  },
-
-  calloutTitle: {
-    color: '#32252B',
-    fontSize: 15,
-    fontWeight: '800',
-  },
-
-  activeText: {
-    marginTop: 2,
-    color: '#A66518',
-    fontSize: 11,
-    fontWeight: '700',
-  },
-
-  calloutDescription: {
-    marginTop: 10,
-    color: '#5D4B53',
-    fontSize: 13,
-    lineHeight: 18,
-  },
-
-  calloutLocation: {
-    marginTop: 8,
-    color: '#927E87',
-    fontSize: 10,
   },
 });
