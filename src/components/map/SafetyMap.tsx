@@ -2,6 +2,7 @@ import { Ionicons } from '@expo/vector-icons';
 import {
   useCallback,
   useEffect,
+  useMemo,
   useRef,
   useState,
 } from 'react';
@@ -19,6 +20,12 @@ import MapView, {
 
 import IncidentDetailsModal from '@/src/components/map/IncidentDetailsModal';
 import IncidentMapMarker from '@/src/components/map/IncidentMapMarker';
+import IncidentTypeFilters from '@/src/components/map/IncidentTypeFilters';
+
+import type {
+  IncidentFilterValue,
+} from '@/src/components/map/IncidentTypeFilters';
+
 import { useCurrentLocation } from '@/src/hooks/useCurrentLocation';
 import { useLocationPermission } from '@/src/hooks/useLocationPermission';
 import { useActiveIncidents } from '@/src/hooks/useRecentIncidents';
@@ -52,6 +59,11 @@ export default function SafetyMap() {
     setSelectedIncident,
   ] = useState<Incident | null>(null);
 
+  const [
+    selectedFilter,
+    setSelectedFilter,
+  ] = useState<IncidentFilterValue>('all');
+
   const {
     permissionState,
     errorMessage,
@@ -73,6 +85,34 @@ export default function SafetyMap() {
     error: incidentsError,
     retry: retryIncidents,
   } = useActiveIncidents();
+
+  const filteredIncidents =
+    useMemo(() => {
+      if (selectedFilter === 'all') {
+        return incidents;
+      }
+
+      return incidents.filter(
+        incident =>
+          incident.type ===
+          selectedFilter
+      );
+    }, [
+      incidents,
+      selectedFilter,
+    ]);
+
+  const handleFilterSelect =
+    useCallback(
+      (
+        filter:
+          IncidentFilterValue
+      ) => {
+        setSelectedFilter(filter);
+        setSelectedIncident(null);
+      },
+      []
+    );
 
   const handleMapReady = () => {
     setIsMapReady(true);
@@ -184,6 +224,18 @@ export default function SafetyMap() {
     permissionState === 'loading' ||
     isLocationLoading;
 
+  const selectedFilterLabel =
+    selectedFilter === 'all'
+      ? 'All'
+      : selectedFilter
+          .split('-')
+          .map(
+            word =>
+              word.charAt(0).toUpperCase() +
+              word.slice(1)
+          )
+          .join(' ');
+
   return (
     <View style={styles.container}>
       <MapView
@@ -201,14 +253,27 @@ export default function SafetyMap() {
         showsMyLocationButton={false}
         onMapReady={handleMapReady}
       >
-        {incidents.map(incident => (
-          <IncidentMapMarker
-            key={incident.id}
-            incident={incident}
-            onPress={setSelectedIncident}
-          />
-        ))}
+        {filteredIncidents.map(
+          incident => (
+            <IncidentMapMarker
+              key={incident.id}
+              incident={incident}
+              onPress={
+                setSelectedIncident
+              }
+            />
+          )
+        )}
       </MapView>
+
+      {!isMapLoading ? (
+        <View style={styles.filterContainer}>
+          <IncidentTypeFilters
+            selectedFilter={selectedFilter}
+            onSelect={handleFilterSelect}
+          />
+        </View>
+      ) : null}
 
       {isMapLoading ? (
         <View
@@ -306,7 +371,8 @@ export default function SafetyMap() {
       {!isMapLoading &&
       !incidentsLoading &&
       !incidentsError &&
-      incidents.length > 0 ? (
+      incidents.length > 0 &&
+      filteredIncidents.length > 0 ? (
         <View
           style={styles.incidentCountCard}
           pointerEvents="none"
@@ -318,11 +384,54 @@ export default function SafetyMap() {
           />
 
           <Text style={styles.incidentCountText}>
-            {incidents.length}{' '}
-            {incidents.length === 1
-              ? 'active incident'
-              : 'active incidents'}
+            {filteredIncidents.length}{' '}
+            {filteredIncidents.length === 1
+              ? 'visible incident'
+              : 'visible incidents'}
           </Text>
+        </View>
+      ) : null}
+
+      {!isMapLoading &&
+      !incidentsLoading &&
+      !incidentsError &&
+      incidents.length > 0 &&
+      filteredIncidents.length === 0 ? (
+        <View style={styles.noResultsCard}>
+          <View style={styles.noResultsIcon}>
+            <Ionicons
+              name="search-outline"
+              size={22}
+              color="#A92F61"
+            />
+          </View>
+
+          <View style={styles.noResultsTextArea}>
+            <Text style={styles.noResultsTitle}>
+              No matching incidents
+            </Text>
+
+            <Text style={styles.noResultsDescription}>
+              No active {selectedFilterLabel} reports are currently available.
+            </Text>
+          </View>
+
+          <Pressable
+            style={({ pressed }) => [
+              styles.showAllButton,
+              pressed &&
+                styles.showAllPressed,
+            ]}
+            onPress={() =>
+              handleFilterSelect('all')
+            }
+            accessibilityRole="button"
+            accessibilityLabel="Show all incidents"
+          >
+            <Text style={styles.showAllText}>
+              All
+            </Text>
+          </Pressable>
         </View>
       ) : null}
 
@@ -425,6 +534,15 @@ const styles = StyleSheet.create({
     ...StyleSheet.absoluteFillObject,
   },
 
+  filterContainer: {
+    position: 'absolute',
+    top: 12,
+    left: 0,
+    right: 0,
+    zIndex: 25,
+    elevation: 25,
+  },
+
   loadingOverlay: {
     ...StyleSheet.absoluteFillObject,
     alignItems: 'center',
@@ -443,7 +561,7 @@ const styles = StyleSheet.create({
 
   statusCard: {
     position: 'absolute',
-    top: 16,
+    top: 75,
     alignSelf: 'center',
     flexDirection: 'row',
     alignItems: 'center',
@@ -464,7 +582,7 @@ const styles = StyleSheet.create({
 
   incidentStatusCard: {
     position: 'absolute',
-    top: 76,
+    top: 130,
     left: 16,
     flexDirection: 'row',
     alignItems: 'center',
@@ -487,7 +605,7 @@ const styles = StyleSheet.create({
 
   incidentErrorCard: {
     position: 'absolute',
-    top: 76,
+    top: 130,
     left: 16,
     right: 16,
     flexDirection: 'row',
@@ -524,7 +642,7 @@ const styles = StyleSheet.create({
 
   incidentCountCard: {
     position: 'absolute',
-    top: 76,
+    top: 75,
     left: 16,
     flexDirection: 'row',
     alignItems: 'center',
@@ -543,6 +661,68 @@ const styles = StyleSheet.create({
     color: '#5D4B53',
     fontSize: 12,
     fontWeight: '700',
+  },
+
+  noResultsCard: {
+    position: 'absolute',
+    top: 80,
+    left: 16,
+    right: 16,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+    zIndex: 22,
+    elevation: 22,
+    padding: 13,
+    borderWidth: 1,
+    borderColor: '#F1DDE6',
+    borderRadius: 17,
+    backgroundColor: '#FFFFFF',
+  },
+
+  noResultsIcon: {
+    width: 40,
+    height: 40,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderRadius: 13,
+    backgroundColor: '#FBEAF1',
+  },
+
+  noResultsTextArea: {
+    flex: 1,
+  },
+
+  noResultsTitle: {
+    color: '#32252B',
+    fontSize: 14,
+    fontWeight: '800',
+  },
+
+  noResultsDescription: {
+    marginTop: 3,
+    color: '#927E87',
+    fontSize: 11,
+    lineHeight: 16,
+  },
+
+  showAllButton: {
+    minWidth: 46,
+    minHeight: 38,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderRadius: 12,
+    backgroundColor: '#C43D74',
+  },
+
+  showAllPressed: {
+    opacity: 0.72,
+  },
+
+  showAllText: {
+    color: '#FFFFFF',
+    fontSize: 12,
+    fontWeight: '800',
   },
 
   myLocationButton: {
