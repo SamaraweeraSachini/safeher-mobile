@@ -17,10 +17,13 @@ import MapView, {
   Region,
 } from 'react-native-maps';
 
+import IncidentDetailsModal from '@/src/components/map/IncidentDetailsModal';
 import IncidentMapMarker from '@/src/components/map/IncidentMapMarker';
 import { useCurrentLocation } from '@/src/hooks/useCurrentLocation';
 import { useLocationPermission } from '@/src/hooks/useLocationPermission';
 import { useActiveIncidents } from '@/src/hooks/useRecentIncidents';
+
+import type { Incident } from '@/src/types/incident';
 
 import LocationPermissionMessage from './LocationPermissionMessage';
 
@@ -43,6 +46,11 @@ export default function SafetyMap() {
 
   const [isMapReady, setIsMapReady] =
     useState(false);
+
+  const [
+    selectedIncident,
+    setSelectedIncident,
+  ] = useState<Incident | null>(null);
 
   const {
     permissionState,
@@ -197,6 +205,7 @@ export default function SafetyMap() {
           <IncidentMapMarker
             key={incident.id}
             incident={incident}
+            onPress={setSelectedIncident}
           />
         ))}
       </MapView>
@@ -342,10 +351,8 @@ export default function SafetyMap() {
         <Pressable
           style={({ pressed }) => [
             styles.myLocationButton,
-
             pressed &&
               styles.myLocationButtonPressed,
-
             isMyLocationLoading &&
               styles.myLocationButtonDisabled,
           ]}
@@ -396,6 +403,14 @@ export default function SafetyMap() {
           </View>
         </View>
       ) : null}
+
+      <IncidentDetailsModal
+        incident={selectedIncident}
+        visible={selectedIncident !== null}
+        onClose={() =>
+          setSelectedIncident(null)
+        }
+      />
     </View>
   );
 }
@@ -414,9 +429,9 @@ const styles = StyleSheet.create({
     ...StyleSheet.absoluteFillObject,
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: '#FFF8FB',
     zIndex: 30,
     elevation: 30,
+    backgroundColor: '#FFF8FB',
   },
 
   loadingText: {
@@ -439,13 +454,6 @@ const styles = StyleSheet.create({
     paddingHorizontal: 16,
     borderRadius: 20,
     backgroundColor: '#FFFFFF',
-    shadowColor: '#5A3D4D',
-    shadowOffset: {
-      width: 0,
-      height: 2,
-    },
-    shadowOpacity: 0.1,
-    shadowRadius: 6,
   },
 
   statusText: {
@@ -465,10 +473,10 @@ const styles = StyleSheet.create({
     elevation: 18,
     paddingVertical: 9,
     paddingHorizontal: 13,
-    borderRadius: 16,
-    backgroundColor: '#FFFFFF',
     borderWidth: 1,
     borderColor: '#F1DDE6',
+    borderRadius: 16,
+    backgroundColor: '#FFFFFF',
   },
 
   incidentStatusText: {
@@ -551,13 +559,6 @@ const styles = StyleSheet.create({
     borderColor: '#F1DDE6',
     borderRadius: 26,
     backgroundColor: '#FFFFFF',
-    shadowColor: '#5A3D4D',
-    shadowOffset: {
-      width: 0,
-      height: 2,
-    },
-    shadowOpacity: 0.16,
-    shadowRadius: 6,
   },
 
   myLocationButtonPressed: {
@@ -589,13 +590,6 @@ const styles = StyleSheet.create({
     borderColor: '#F1DDE6',
     borderRadius: 16,
     backgroundColor: '#FFFFFF',
-    shadowColor: '#5A3D4D',
-    shadowOffset: {
-      width: 0,
-      height: 2,
-    },
-    shadowOpacity: 0.1,
-    shadowRadius: 6,
   },
 
   locationIconContainer: {
