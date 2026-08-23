@@ -48,9 +48,17 @@ export default function TabLayout() {
         options={{
           title: 'Home',
           tabBarAccessibilityLabel: 'Home tab',
-          tabBarIcon: ({ color, focused, size }) => (
+          tabBarIcon: ({
+            color,
+            focused,
+            size,
+          }) => (
             <Ionicons
-              name={focused ? 'home' : 'home-outline'}
+              name={
+                focused
+                  ? 'home'
+                  : 'home-outline'
+              }
               size={size}
               color={color}
             />
@@ -62,10 +70,19 @@ export default function TabLayout() {
         name="safety-map"
         options={{
           title: 'Safety Map',
-          tabBarAccessibilityLabel: 'Safety Map tab',
-          tabBarIcon: ({ color, focused, size }) => (
+          tabBarAccessibilityLabel:
+            'Safety Map tab',
+          tabBarIcon: ({
+            color,
+            focused,
+            size,
+          }) => (
             <Ionicons
-              name={focused ? 'map' : 'map-outline'}
+              name={
+                focused
+                  ? 'map'
+                  : 'map-outline'
+              }
               size={size}
               color={color}
             />
@@ -77,10 +94,19 @@ export default function TabLayout() {
         name="report"
         options={{
           title: 'Report',
-          tabBarAccessibilityLabel: 'Report Incident tab',
-          tabBarIcon: ({ color, focused, size }) => (
+          tabBarAccessibilityLabel:
+            'Report Incident tab',
+          tabBarIcon: ({
+            color,
+            focused,
+            size,
+          }) => (
             <Ionicons
-              name={focused ? 'warning' : 'warning-outline'}
+              name={
+                focused
+                  ? 'warning'
+                  : 'warning-outline'
+              }
               size={size}
               color={color}
             />
@@ -92,10 +118,19 @@ export default function TabLayout() {
         name="journey"
         options={{
           title: 'Journey',
-          tabBarAccessibilityLabel: 'Safe Journey tab',
-          tabBarIcon: ({ color, focused, size }) => (
+          tabBarAccessibilityLabel:
+            'Safe Journey tab',
+          tabBarIcon: ({
+            color,
+            focused,
+            size,
+          }) => (
             <Ionicons
-              name={focused ? 'navigate' : 'navigate-outline'}
+              name={
+                focused
+                  ? 'navigate'
+                  : 'navigate-outline'
+              }
               size={size}
               color={color}
             />
@@ -107,10 +142,19 @@ export default function TabLayout() {
         name="profile"
         options={{
           title: 'Profile',
-          tabBarAccessibilityLabel: 'Profile tab',
-          tabBarIcon: ({ color, focused, size }) => (
+          tabBarAccessibilityLabel:
+            'Profile tab',
+          tabBarIcon: ({
+            color,
+            focused,
+            size,
+          }) => (
             <Ionicons
-              name={focused ? 'person-circle' : 'person-circle-outline'}
+              name={
+                focused
+                  ? 'person-circle'
+                  : 'person-circle-outline'
+              }
               size={size}
               color={color}
             />
@@ -140,19 +184,25 @@ export default function TabLayout() {
       />
 
       <Tabs.Screen
-  name="privacy-safety"
-  options={{
-    href: null,
-  }}
-/>
+        name="privacy-safety"
+        options={{
+          href: null,
+        }}
+      />
 
-<Tabs.Screen
-  name="reporting-guidelines"
-  options={{
-    href: null,
-  }}
-/>
+      <Tabs.Screen
+        name="reporting-guidelines"
+        options={{
+          href: null,
+        }}
+      />
 
+      <Tabs.Screen
+        name="recent-incidents"
+        options={{
+          href: null,
+        }}
+      />
 
       <Tabs.Screen
         name="explore"
@@ -163,3 +213,4 @@ export default function TabLayout() {
     </Tabs>
   );
 }
+

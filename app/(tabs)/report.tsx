@@ -230,7 +230,6 @@ export default function ReportScreen() {
 
     if (!hasEnteredInformation) {
       resetForm();
-
       return;
     }
 
@@ -292,7 +291,11 @@ export default function ReportScreen() {
       >
         <View style={styles.header}>
           <View style={styles.headerIcon}>
-            <Ionicons name="warning-outline" size={27} color={Brand.burgundy} />
+            <Ionicons
+              name="warning-outline"
+              size={27}
+              color={Brand.burgundy}
+            />
           </View>
 
           <View style={styles.headerTextContainer}>
@@ -317,6 +320,42 @@ export default function ReportScreen() {
           </Text>
         </View>
 
+        <Pressable
+          accessibilityRole="button"
+          accessibilityLabel="View recent incidents"
+          onPress={() => {
+            router.push("/recent-incidents" as any);
+          }}
+          style={({ pressed }) => [
+            styles.recentIncidentsCard,
+            pressed && styles.pressed,
+          ]}
+        >
+          <View style={styles.recentIncidentsIcon}>
+            <Ionicons
+              name="time-outline"
+              size={23}
+              color={Brand.burgundy}
+            />
+          </View>
+
+          <View style={styles.recentIncidentsTextContainer}>
+            <Text style={styles.recentIncidentsTitle}>
+              Recent Incidents
+            </Text>
+
+            <Text style={styles.recentIncidentsDescription}>
+              Browse recently reported safety incidents from the community.
+            </Text>
+          </View>
+
+          <Ionicons
+            name="chevron-forward"
+            size={20}
+            color={Brand.burgundy}
+          />
+        </Pressable>
+
         {hasErrors ? (
           <View style={styles.errorSummary}>
             <Ionicons
@@ -333,7 +372,10 @@ export default function ReportScreen() {
         ) : null}
 
         <View
-          style={[styles.section, errors.category && styles.sectionWithError]}
+          style={[
+            styles.section,
+            errors.category && styles.sectionWithError,
+          ]}
         >
           <View style={styles.sectionHeading}>
             <Text style={styles.sectionTitle}>Incident type</Text>
@@ -404,7 +446,9 @@ export default function ReportScreen() {
             })}
           </View>
 
-          {errors.category ? <ErrorMessage message={errors.category} /> : null}
+          {errors.category ? (
+            <ErrorMessage message={errors.category} />
+          ) : null}
         </View>
 
         <View
@@ -443,7 +487,10 @@ export default function ReportScreen() {
           <View style={styles.descriptionFooter}>
             <View style={styles.descriptionErrorContainer}>
               {errors.description ? (
-                <ErrorMessage message={errors.description} compact />
+                <ErrorMessage
+                  message={errors.description}
+                  compact
+                />
               ) : null}
             </View>
 
@@ -460,7 +507,10 @@ export default function ReportScreen() {
         </View>
 
         <View
-          style={[styles.section, errors.location && styles.sectionWithError]}
+          style={[
+            styles.section,
+            errors.location && styles.sectionWithError,
+          ]}
         >
           <View style={styles.sectionHeading}>
             <Text style={styles.sectionTitle}>Incident location</Text>
@@ -493,14 +543,23 @@ export default function ReportScreen() {
               ]}
             >
               {isLocationBusy ? (
-                <ActivityIndicator size="small" color={Brand.burgundy} />
+                <ActivityIndicator
+                  size="small"
+                  color={Brand.burgundy}
+                />
               ) : (
                 <Ionicons
                   name={
-                    incidentLocation ? "checkmark-circle" : "locate-outline"
+                    incidentLocation
+                      ? "checkmark-circle"
+                      : "locate-outline"
                   }
                   size={23}
-                  color={incidentLocation ? Brand.white : Brand.burgundy}
+                  color={
+                    incidentLocation
+                      ? Brand.white
+                      : Brand.burgundy
+                  }
                 />
               )}
             </View>
@@ -527,9 +586,17 @@ export default function ReportScreen() {
 
             {!isLocationBusy ? (
               <Ionicons
-                name={incidentLocation ? "checkmark" : "chevron-forward"}
+                name={
+                  incidentLocation
+                    ? "checkmark"
+                    : "chevron-forward"
+                }
                 size={20}
-                color={incidentLocation ? Brand.burgundy : Brand.muted}
+                color={
+                  incidentLocation
+                    ? Brand.burgundy
+                    : Brand.muted
+                }
               />
             ) : null}
           </Pressable>
@@ -576,22 +643,32 @@ export default function ReportScreen() {
                     color={Brand.burgundy}
                   />
 
-                  <Text style={styles.retryLocationText}>Try Again</Text>
+                  <Text style={styles.retryLocationText}>
+                    Try Again
+                  </Text>
                 </Pressable>
               </View>
             </View>
           ) : null}
 
-          {errors.location ? <ErrorMessage message={errors.location} /> : null}
+          {errors.location ? (
+            <ErrorMessage message={errors.location} />
+          ) : null}
         </View>
 
         <View style={styles.optionCard}>
           <View style={styles.optionIcon}>
-            <Ionicons name="person-outline" size={23} color={Brand.burgundy} />
+            <Ionicons
+              name="person-outline"
+              size={23}
+              color={Brand.burgundy}
+            />
           </View>
 
           <View style={styles.optionTextContainer}>
-            <Text style={styles.optionTitle}>Report anonymously</Text>
+            <Text style={styles.optionTitle}>
+              Report anonymously
+            </Text>
 
             <Text style={styles.optionDescription}>
               Your name and email will not be publicly displayed.
@@ -606,7 +683,11 @@ export default function ReportScreen() {
               false: Brand.line,
               true: Brand.roseSoft,
             }}
-            thumbColor={reportAnonymously ? Brand.burgundy : Brand.white}
+            thumbColor={
+              reportAnonymously
+                ? Brand.burgundy
+                : Brand.white
+            }
             accessibilityLabel="Report anonymously"
           />
         </View>
@@ -633,7 +714,11 @@ export default function ReportScreen() {
             ]}
           >
             {guidelinesAccepted ? (
-              <Ionicons name="checkmark" size={17} color={Brand.white} />
+              <Ionicons
+                name="checkmark"
+                size={17}
+                color={Brand.white}
+              />
             ) : null}
           </Pressable>
 
@@ -647,7 +732,9 @@ export default function ReportScreen() {
               accessibilityRole="link"
               disabled={isSubmitting}
               onPress={() => {
-                router.push("/(tabs)/reporting-guidelines");
+                router.push(
+                  "/(tabs)/reporting-guidelines",
+                );
               }}
             >
               <Text style={styles.guidelinesLink}>
@@ -672,7 +759,9 @@ export default function ReportScreen() {
               pressed && styles.pressed,
             ]}
           >
-            <Text style={styles.cancelButtonText}>Cancel</Text>
+            <Text style={styles.cancelButtonText}>
+              Cancel
+            </Text>
           </Pressable>
 
           <Pressable
@@ -686,7 +775,10 @@ export default function ReportScreen() {
             ]}
           >
             {isSubmitting ? (
-              <ActivityIndicator size="small" color={Brand.white} />
+              <ActivityIndicator
+                size="small"
+                color={Brand.white}
+              />
             ) : (
               <>
                 <Ionicons
@@ -695,7 +787,9 @@ export default function ReportScreen() {
                   color={Brand.white}
                 />
 
-                <Text style={styles.submitButtonText}>Submit Report</Text>
+                <Text style={styles.submitButtonText}>
+                  Submit Report
+                </Text>
               </>
             )}
           </Pressable>
@@ -709,12 +803,26 @@ export default function ReportScreen() {
   );
 }
 
-function ErrorMessage({ message, compact = false }: ErrorMessageProps) {
+function ErrorMessage({
+  message,
+  compact = false,
+}: ErrorMessageProps) {
   return (
-    <View style={[styles.errorMessage, compact && styles.errorMessageCompact]}>
-      <Ionicons name="alert-circle" size={15} color={Brand.burgundy} />
+    <View
+      style={[
+        styles.errorMessage,
+        compact && styles.errorMessageCompact,
+      ]}
+    >
+      <Ionicons
+        name="alert-circle"
+        size={15}
+        color={Brand.burgundy}
+      />
 
-      <Text style={styles.errorMessageText}>{message}</Text>
+      <Text style={styles.errorMessageText}>
+        {message}
+      </Text>
     </View>
   );
 }
@@ -724,19 +832,23 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: Brand.cream,
   },
+
   scrollView: {
     flex: 1,
   },
+
   content: {
     paddingHorizontal: 18,
     paddingTop: 20,
     paddingBottom: 40,
   },
+
   header: {
     flexDirection: "row",
     alignItems: "center",
     marginBottom: 18,
   },
+
   headerIcon: {
     width: 52,
     height: 52,
@@ -746,20 +858,24 @@ const styles = StyleSheet.create({
     backgroundColor: Brand.blush,
     marginRight: 13,
   },
+
   headerTextContainer: {
     flex: 1,
   },
+
   title: {
     color: Brand.ink,
     fontSize: 25,
     fontWeight: "800",
   },
+
   subtitle: {
     color: Brand.muted,
     fontSize: 14,
     lineHeight: 20,
     marginTop: 3,
   },
+
   safetyNotice: {
     flexDirection: "row",
     alignItems: "flex-start",
@@ -770,6 +886,7 @@ const styles = StyleSheet.create({
     padding: 14,
     marginBottom: 14,
   },
+
   safetyNoticeText: {
     flex: 1,
     color: Brand.burgundyDeep,
@@ -777,6 +894,46 @@ const styles = StyleSheet.create({
     lineHeight: 19,
     marginLeft: 10,
   },
+
+  recentIncidentsCard: {
+    flexDirection: "row",
+    alignItems: "center",
+    backgroundColor: Brand.white,
+    borderWidth: 1,
+    borderColor: Brand.line,
+    borderRadius: 18,
+    padding: 14,
+    marginBottom: 15,
+  },
+
+  recentIncidentsIcon: {
+    width: 46,
+    height: 46,
+    borderRadius: 14,
+    backgroundColor: Brand.blush,
+    alignItems: "center",
+    justifyContent: "center",
+    marginRight: 11,
+  },
+
+  recentIncidentsTextContainer: {
+    flex: 1,
+    paddingRight: 8,
+  },
+
+  recentIncidentsTitle: {
+    color: Brand.ink,
+    fontSize: 15,
+    fontWeight: "700",
+  },
+
+  recentIncidentsDescription: {
+    color: Brand.muted,
+    fontSize: 12,
+    lineHeight: 17,
+    marginTop: 3,
+  },
+
   errorSummary: {
     flexDirection: "row",
     alignItems: "flex-start",
@@ -787,6 +944,7 @@ const styles = StyleSheet.create({
     padding: 13,
     marginBottom: 15,
   },
+
   errorSummaryText: {
     flex: 1,
     color: Brand.burgundyDeep,
@@ -795,6 +953,7 @@ const styles = StyleSheet.create({
     marginLeft: 9,
     fontWeight: "600",
   },
+
   section: {
     backgroundColor: Brand.white,
     borderWidth: 1,
@@ -803,19 +962,23 @@ const styles = StyleSheet.create({
     padding: 16,
     marginBottom: 15,
   },
+
   sectionWithError: {
     borderColor: Brand.rose,
   },
+
   sectionHeading: {
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "space-between",
   },
+
   sectionTitle: {
     color: Brand.ink,
     fontSize: 17,
     fontWeight: "700",
   },
+
   required: {
     color: Brand.burgundy,
     fontSize: 12,
@@ -825,11 +988,13 @@ const styles = StyleSheet.create({
     paddingVertical: 4,
     borderRadius: 10,
   },
+
   optional: {
     color: Brand.muted,
     fontSize: 12,
     fontWeight: "600",
   },
+
   sectionDescription: {
     color: Brand.muted,
     fontSize: 13,
@@ -837,12 +1002,14 @@ const styles = StyleSheet.create({
     marginTop: 6,
     marginBottom: 14,
   },
+
   categoryGrid: {
     flexDirection: "row",
     flexWrap: "wrap",
     justifyContent: "space-between",
     gap: 10,
   },
+
   categoryCard: {
     width: "48%",
     minHeight: 96,
@@ -854,11 +1021,13 @@ const styles = StyleSheet.create({
     justifyContent: "center",
     position: "relative",
   },
+
   categoryCardSelected: {
     backgroundColor: Brand.blush,
     borderColor: Brand.burgundy,
     borderWidth: 2,
   },
+
   categoryIcon: {
     width: 38,
     height: 38,
@@ -867,19 +1036,23 @@ const styles = StyleSheet.create({
     justifyContent: "center",
     marginBottom: 8,
   },
+
   categoryLabel: {
     color: Brand.ink,
     fontSize: 13,
     fontWeight: "700",
   },
+
   categoryLabelSelected: {
     color: Brand.burgundyDeep,
   },
+
   selectedCheck: {
     position: "absolute",
     right: 9,
     top: 9,
   },
+
   descriptionInput: {
     minHeight: 125,
     borderWidth: 1,
@@ -892,27 +1065,33 @@ const styles = StyleSheet.create({
     paddingHorizontal: 13,
     paddingVertical: 12,
   },
+
   inputWithError: {
     borderColor: Brand.rose,
   },
+
   descriptionFooter: {
     flexDirection: "row",
     alignItems: "flex-start",
     justifyContent: "space-between",
     marginTop: 7,
   },
+
   descriptionErrorContainer: {
     flex: 1,
     paddingRight: 8,
   },
+
   characterCount: {
     color: Brand.muted,
     fontSize: 12,
   },
+
   characterCountLimit: {
     color: Brand.burgundy,
     fontWeight: "700",
   },
+
   locationButton: {
     flexDirection: "row",
     alignItems: "center",
@@ -922,10 +1101,12 @@ const styles = StyleSheet.create({
     backgroundColor: Brand.cream,
     padding: 13,
   },
+
   locationButtonSelected: {
     borderColor: Brand.burgundy,
     backgroundColor: Brand.blush,
   },
+
   locationIcon: {
     width: 42,
     height: 42,
@@ -934,23 +1115,28 @@ const styles = StyleSheet.create({
     justifyContent: "center",
     backgroundColor: Brand.blush,
   },
+
   locationIconSelected: {
     backgroundColor: Brand.burgundy,
   },
+
   locationTextContainer: {
     flex: 1,
     marginHorizontal: 11,
   },
+
   locationTitle: {
     color: Brand.ink,
     fontSize: 14,
     fontWeight: "700",
   },
+
   locationDescription: {
     color: Brand.muted,
     fontSize: 12,
     marginTop: 3,
   },
+
   locationConfirmation: {
     flexDirection: "row",
     alignItems: "flex-start",
@@ -960,6 +1146,7 @@ const styles = StyleSheet.create({
     paddingVertical: 9,
     marginTop: 10,
   },
+
   locationConfirmationText: {
     flex: 1,
     color: Brand.burgundyDeep,
@@ -967,6 +1154,7 @@ const styles = StyleSheet.create({
     lineHeight: 17,
     marginLeft: 7,
   },
+
   locationFailure: {
     flexDirection: "row",
     alignItems: "flex-start",
@@ -975,15 +1163,18 @@ const styles = StyleSheet.create({
     padding: 11,
     marginTop: 10,
   },
+
   locationFailureTextContainer: {
     flex: 1,
     marginLeft: 7,
   },
+
   locationFailureText: {
     color: Brand.burgundyDeep,
     fontSize: 12,
     lineHeight: 17,
   },
+
   retryLocationButton: {
     alignSelf: "flex-start",
     flexDirection: "row",
@@ -991,12 +1182,14 @@ const styles = StyleSheet.create({
     gap: 5,
     marginTop: 8,
   },
+
   retryLocationText: {
     color: Brand.burgundy,
     fontSize: 12,
     fontWeight: "700",
     textDecorationLine: "underline",
   },
+
   optionCard: {
     flexDirection: "row",
     alignItems: "center",
@@ -1007,6 +1200,7 @@ const styles = StyleSheet.create({
     padding: 16,
     marginBottom: 15,
   },
+
   optionIcon: {
     width: 43,
     height: 43,
@@ -1016,21 +1210,25 @@ const styles = StyleSheet.create({
     backgroundColor: Brand.blush,
     marginRight: 11,
   },
+
   optionTextContainer: {
     flex: 1,
     paddingRight: 10,
   },
+
   optionTitle: {
     color: Brand.ink,
     fontSize: 15,
     fontWeight: "700",
   },
+
   optionDescription: {
     color: Brand.muted,
     fontSize: 12,
     lineHeight: 17,
     marginTop: 3,
   },
+
   guidelinesCard: {
     flexDirection: "row",
     alignItems: "flex-start",
@@ -1041,6 +1239,7 @@ const styles = StyleSheet.create({
     padding: 16,
     marginBottom: 18,
   },
+
   checkbox: {
     width: 24,
     height: 24,
@@ -1052,21 +1251,26 @@ const styles = StyleSheet.create({
     marginRight: 11,
     marginTop: 1,
   },
+
   checkboxSelected: {
     backgroundColor: Brand.burgundy,
     borderColor: Brand.burgundy,
   },
+
   checkboxWithError: {
     borderColor: Brand.burgundy,
   },
+
   guidelinesTextContainer: {
     flex: 1,
   },
+
   guidelinesText: {
     color: Brand.ink,
     fontSize: 13,
     lineHeight: 19,
   },
+
   guidelinesLink: {
     color: Brand.burgundy,
     fontSize: 13,
@@ -1074,14 +1278,17 @@ const styles = StyleSheet.create({
     textDecorationLine: "underline",
     marginTop: 7,
   },
+
   errorMessage: {
     flexDirection: "row",
     alignItems: "center",
     marginTop: 10,
   },
+
   errorMessageCompact: {
     marginTop: 0,
   },
+
   errorMessageText: {
     flex: 1,
     color: Brand.burgundy,
@@ -1090,10 +1297,12 @@ const styles = StyleSheet.create({
     fontWeight: "600",
     marginLeft: 5,
   },
+
   actionRow: {
     flexDirection: "row",
     gap: 11,
   },
+
   cancelButton: {
     flex: 1,
     minHeight: 52,
@@ -1104,11 +1313,13 @@ const styles = StyleSheet.create({
     justifyContent: "center",
     backgroundColor: Brand.white,
   },
+
   cancelButtonText: {
     color: Brand.burgundy,
     fontSize: 15,
     fontWeight: "700",
   },
+
   submitButton: {
     flex: 1.55,
     minHeight: 52,
@@ -1119,17 +1330,21 @@ const styles = StyleSheet.create({
     justifyContent: "center",
     gap: 8,
   },
+
   submitButtonText: {
     color: Brand.white,
     fontSize: 15,
     fontWeight: "700",
   },
+
   buttonDisabled: {
     opacity: 0.55,
   },
+
   pressed: {
     opacity: 0.75,
   },
+
   privacyMessage: {
     color: Brand.muted,
     fontSize: 12,
@@ -1139,3 +1354,4 @@ const styles = StyleSheet.create({
     paddingHorizontal: 18,
   },
 });
+
