@@ -86,7 +86,7 @@ function IncidentMapMarker({
         x: 0.5,
         y: 0.5,
       }}
-      tracksViewChanges={false}
+      tracksViewChanges
       onPress={() => onPress(incident)}
       accessibilityLabel={`${categoryLabel} incident marker`}
       accessibilityHint="Opens safe public information about this incident"
