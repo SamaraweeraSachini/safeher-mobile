@@ -8,6 +8,8 @@ import {
 
 import {
   ActivityIndicator,
+  Alert,
+  Pressable,
   StyleSheet,
   Text,
   View,
@@ -80,11 +82,8 @@ export default function SafetyMap() {
     }, MINIMUM_LOADING_TIME);
   };
 
-  useEffect(() => {
-    if (
-      !isMapReady ||
-      !location
-    ) {
+  const centreOnCurrentLocation = () => {
+    if (!location) {
       return;
     }
 
@@ -104,14 +103,68 @@ export default function SafetyMap() {
       },
       700
     );
+  };
+
+  useEffect(() => {
+    if (
+      !isMapReady ||
+      !location
+    ) {
+      return;
+    }
+
+    centreOnCurrentLocation();
   }, [
     isMapReady,
     location,
   ]);
 
+  const handleMyLocationPress =
+    async () => {
+      if (
+        permissionState ===
+        'denied'
+      ) {
+        Alert.alert(
+          'Location permission required',
+          'Allow SafeHer to access your location before using My Location.'
+        );
+
+        return;
+      }
+
+      if (
+        permissionState ===
+        'unavailable'
+      ) {
+        Alert.alert(
+          'Location unavailable',
+          'Your location is currently unavailable. Make sure location services are enabled and try again.'
+        );
+
+        return;
+      }
+
+      if (
+        permissionState !==
+        'granted'
+      ) {
+        return;
+      }
+
+      if (location) {
+        centreOnCurrentLocation();
+
+        return;
+      }
+
+      await retryLocation();
+    };
+
   const showPermissionMessage =
     permissionState === 'denied' ||
-    permissionState === 'unavailable';
+    permissionState ===
+      'unavailable';
 
   const permissionTitle =
     permissionState === 'denied'
@@ -121,6 +174,10 @@ export default function SafetyMap() {
   const canShowUserLocation =
     permissionState === 'granted' &&
     location !== null;
+
+  const isMyLocationLoading =
+    permissionState === 'loading' ||
+    isLocationLoading;
 
   return (
     <View style={styles.container}>
@@ -137,15 +194,12 @@ export default function SafetyMap() {
         showsCompass
         showsScale
         toolbarEnabled={false}
-
         showsUserLocation={
           canShowUserLocation
         }
-
         showsMyLocationButton={
           false
         }
-
         onMapReady={
           handleMapReady
         }
@@ -248,6 +302,44 @@ export default function SafetyMap() {
             retryLocation
           }
         />
+      ) : null}
+
+      {!isMapLoading ? (
+        <Pressable
+          style={({
+            pressed,
+          }) => [
+            styles.myLocationButton,
+
+            pressed &&
+              styles.myLocationButtonPressed,
+
+            isMyLocationLoading &&
+              styles.myLocationButtonDisabled,
+          ]}
+          onPress={
+            handleMyLocationPress
+          }
+          disabled={
+            isMyLocationLoading
+          }
+          accessibilityRole="button"
+          accessibilityLabel="My Location"
+          accessibilityHint="Returns the map to your current location"
+        >
+          {isMyLocationLoading ? (
+            <ActivityIndicator
+              size="small"
+              color="#C43D74"
+            />
+          ) : (
+            <Ionicons
+              name="locate"
+              size={24}
+              color="#C43D74"
+            />
+          )}
+        </Pressable>
       ) : null}
 
       {!isMapLoading &&
@@ -380,6 +472,64 @@ const styles =
       fontSize: 14,
 
       fontWeight: '500',
+    },
+
+    myLocationButton: {
+      position: 'absolute',
+
+      right: 16,
+
+      bottom: 88,
+
+      width: 52,
+
+      height: 52,
+
+      borderRadius: 26,
+
+      alignItems: 'center',
+
+      justifyContent:
+        'center',
+
+      zIndex: 20,
+
+      elevation: 8,
+
+      backgroundColor:
+        '#FFFFFF',
+
+      borderWidth: 1,
+
+      borderColor:
+        '#F1DDE6',
+
+      shadowColor:
+        '#5A3D4D',
+
+      shadowOffset: {
+        width: 0,
+        height: 2,
+      },
+
+      shadowOpacity: 0.16,
+
+      shadowRadius: 6,
+    },
+
+    myLocationButtonPressed: {
+      backgroundColor:
+        '#FFF1F6',
+
+      transform: [
+        {
+          scale: 0.96,
+        },
+      ],
+    },
+
+    myLocationButtonDisabled: {
+      opacity: 0.65,
     },
 
     locationReadyCard: {
