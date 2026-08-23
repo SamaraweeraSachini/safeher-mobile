@@ -14,15 +14,21 @@ import { Brand } from "@/constants/brand";
 
 export default function ReportConfirmationScreen() {
   const handleViewSafetyMap = () => {
-    router.replace("/(tabs)/safety-map");
+    router.navigate(
+      "/(tabs)/safety-map"
+    );
   };
 
   const handleReturnHome = () => {
-    router.replace("/(tabs)");
+    router.navigate(
+      "/(tabs)"
+    );
   };
 
   const handleSubmitAnotherReport = () => {
-    router.replace("/(tabs)/report");
+    router.navigate(
+      "/(tabs)/report"
+    );
   };
 
   return (
@@ -427,4 +433,3 @@ const styles = StyleSheet.create({
     marginTop: 18,
   },
 });
-
