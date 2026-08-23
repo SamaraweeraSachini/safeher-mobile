@@ -1,4 +1,7 @@
+import { Ionicons } from '@expo/vector-icons';
+
 import {
+  useEffect,
   useRef,
   useState,
 } from 'react';
@@ -15,6 +18,10 @@ import MapView, {
 } from 'react-native-maps';
 
 import {
+  useCurrentLocation,
+} from '@/src/hooks/useCurrentLocation';
+
+import {
   useLocationPermission,
 } from '@/src/hooks/useLocationPermission';
 
@@ -27,58 +34,96 @@ const DEFAULT_REGION: Region = {
   longitudeDelta: 0.08,
 };
 
-const MINIMUM_LOADING_TIME =
-  700;
+const USER_REGION_DELTA = 0.015;
+
+const MINIMUM_LOADING_TIME = 700;
 
 export default function SafetyMap() {
   const mapRef =
-    useRef<MapView | null>(
-      null
-    );
+    useRef<MapView | null>(null);
 
   const [
     isMapLoading,
     setIsMapLoading,
   ] = useState(true);
 
+  const [
+    isMapReady,
+    setIsMapReady,
+  ] = useState(false);
+
   const {
     permissionState,
     errorMessage,
     retry,
-  } =
-    useLocationPermission();
+  } = useLocationPermission();
 
-  const handleMapReady =
-    () => {
-      mapRef.current
-        ?.animateToRegion(
-          DEFAULT_REGION,
-          0
-        );
+  const {
+    location,
+    isLocationLoading,
+    locationError,
+    retryLocation,
+  } = useCurrentLocation(
+    permissionState
+  );
 
-      setTimeout(() => {
-        setIsMapLoading(
-          false
-        );
-      }, MINIMUM_LOADING_TIME);
-    };
+  const handleMapReady = () => {
+    setIsMapReady(true);
+
+    mapRef.current?.animateToRegion(
+      DEFAULT_REGION,
+      0
+    );
+
+    setTimeout(() => {
+      setIsMapLoading(false);
+    }, MINIMUM_LOADING_TIME);
+  };
+
+  useEffect(() => {
+    if (
+      !isMapReady ||
+      !location
+    ) {
+      return;
+    }
+
+    mapRef.current?.animateToRegion(
+      {
+        latitude:
+          location.latitude,
+
+        longitude:
+          location.longitude,
+
+        latitudeDelta:
+          USER_REGION_DELTA,
+
+        longitudeDelta:
+          USER_REGION_DELTA,
+      },
+      700
+    );
+  }, [
+    isMapReady,
+    location,
+  ]);
 
   const showPermissionMessage =
-    permissionState ===
-      'denied' ||
-    permissionState ===
-      'unavailable';
+    permissionState === 'denied' ||
+    permissionState === 'unavailable';
 
   const permissionTitle =
-    permissionState ===
-    'denied'
+    permissionState === 'denied'
       ? 'Location permission denied'
       : 'Location unavailable';
 
+  const canShowUserLocation =
+    permissionState === 'granted' &&
+    location !== null;
+
   return (
-    <View
-      style={styles.container}
-    >
+    <View style={styles.container}>
       <MapView
         ref={mapRef}
         style={styles.map}
@@ -91,9 +136,16 @@ export default function SafetyMap() {
         pitchEnabled
         showsCompass
         showsScale
-        toolbarEnabled={
+        toolbarEnabled={false}
+
+        showsUserLocation={
+          canShowUserLocation
+        }
+
+        showsMyLocationButton={
           false
         }
+
         onMapReady={
           handleMapReady
         }
@@ -126,7 +178,7 @@ export default function SafetyMap() {
         'loading' ? (
         <View
           style={
-            styles.permissionLoading
+            styles.statusCard
           }
         >
           <ActivityIndicator
@@ -136,10 +188,34 @@ export default function SafetyMap() {
 
           <Text
             style={
-              styles.permissionLoadingText
+              styles.statusText
             }
           >
             Checking location permission...
+          </Text>
+        </View>
+      ) : null}
+
+      {!isMapLoading &&
+      permissionState ===
+        'granted' &&
+      isLocationLoading ? (
+        <View
+          style={
+            styles.statusCard
+          }
+        >
+          <ActivityIndicator
+            size="small"
+            color="#C43D74"
+          />
+
+          <Text
+            style={
+              styles.statusText
+            }
+          >
+            Getting your location...
           </Text>
         </View>
       ) : null}
@@ -157,6 +233,63 @@ export default function SafetyMap() {
           onRetry={retry}
         />
       ) : null}
+
+      {!isMapLoading &&
+      permissionState ===
+        'granted' &&
+      !isLocationLoading &&
+      locationError ? (
+        <LocationPermissionMessage
+          title="Location unavailable"
+          message={
+            locationError
+          }
+          onRetry={
+            retryLocation
+          }
+        />
+      ) : null}
+
+      {!isMapLoading &&
+      location &&
+      !isLocationLoading ? (
+        <View
+          style={
+            styles.locationReadyCard
+          }
+          pointerEvents="none"
+        >
+          <View
+            style={
+              styles.locationIconContainer
+            }
+          >
+            <Ionicons
+              name="navigate"
+              size={14}
+              color="#FFFFFF"
+            />
+          </View>
+
+          <View>
+            <Text
+              style={
+                styles.locationReadyTitle
+              }
+            >
+              Your location
+            </Text>
+
+            <Text
+              style={
+                styles.locationReadyText
+              }
+            >
+              Current position found
+            </Text>
+          </View>
+        </View>
+      ) : null}
     </View>
   );
 }
@@ -165,6 +298,7 @@ const styles =
   StyleSheet.create({
     container: {
       flex: 1,
+
       backgroundColor:
         '#FFF8FB',
     },
@@ -179,6 +313,7 @@ const styles =
         .absoluteFillObject,
 
       alignItems: 'center',
+
       justifyContent:
         'center',
 
@@ -186,17 +321,21 @@ const styles =
         '#FFF8FB',
 
       zIndex: 30,
+
       elevation: 30,
     },
 
     loadingText: {
       color: '#667085',
+
       fontSize: 15,
+
       fontWeight: '500',
+
       marginTop: 12,
     },
 
-    permissionLoading: {
+    statusCard: {
       position: 'absolute',
 
       top: 16,
@@ -210,6 +349,7 @@ const styles =
       gap: 8,
 
       zIndex: 20,
+
       elevation: 20,
 
       backgroundColor:
@@ -224,14 +364,101 @@ const styles =
       shadowColor:
         '#5A3D4D',
 
+      shadowOffset: {
+        width: 0,
+        height: 2,
+      },
+
       shadowOpacity: 0.1,
 
       shadowRadius: 6,
     },
 
-    permissionLoadingText: {
+    statusText: {
       color: '#667085',
+
       fontSize: 14,
+
       fontWeight: '500',
+    },
+
+    locationReadyCard: {
+      position: 'absolute',
+
+      bottom: 18,
+
+      alignSelf: 'center',
+
+      flexDirection: 'row',
+
+      alignItems: 'center',
+
+      gap: 10,
+
+      zIndex: 15,
+
+      elevation: 15,
+
+      minWidth: 180,
+
+      backgroundColor:
+        '#FFFFFF',
+
+      borderWidth: 1,
+
+      borderColor:
+        '#F1DDE6',
+
+      borderRadius: 16,
+
+      paddingVertical: 10,
+
+      paddingHorizontal: 14,
+
+      shadowColor:
+        '#5A3D4D',
+
+      shadowOffset: {
+        width: 0,
+        height: 2,
+      },
+
+      shadowOpacity: 0.1,
+
+      shadowRadius: 6,
+    },
+
+    locationIconContainer: {
+      width: 32,
+
+      height: 32,
+
+      borderRadius: 16,
+
+      alignItems: 'center',
+
+      justifyContent:
+        'center',
+
+      backgroundColor:
+        '#C43D74',
+    },
+
+    locationReadyTitle: {
+      color: '#24151C',
+
+      fontSize: 13,
+
+      fontWeight: '700',
+    },
+
+    locationReadyText: {
+      color: '#667085',
+
+      fontSize: 12,
+
+      fontWeight: '500',
+
+      marginTop: 1,
     },
   });
