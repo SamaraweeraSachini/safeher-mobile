@@ -1,83 +1,270 @@
-import { Ionicons } from '@expo/vector-icons';
-import { useRouter } from 'expo-router';
+import { Ionicons } from "@expo/vector-icons";
+import { router } from "expo-router";
 import {
-    Pressable,
-    ScrollView,
-    StyleSheet,
-    Text,
-    View,
-} from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
+  Pressable,
+  SafeAreaView,
+  ScrollView,
+  StatusBar,
+  StyleSheet,
+  Text,
+  View,
+} from "react-native";
 
-const GUIDELINES = [
-  'Choose the incident category that most accurately describes the situation.',
-  'Provide a clear location and time whenever it is safe to do so.',
-  'Describe what happened using factual and respectful language.',
-  'Do not include unnecessary private information about another person.',
-  'Only attach media that is relevant and safe to share.',
-  'Do not submit knowingly false, misleading or duplicate reports.',
-];
+import { Brand } from "@/constants/brand";
 
-export default function ReportingGuidelinesScreen() {
-  const router = useRouter();
+type GuidelineItemProps = {
+  icon:
+    | "checkmark-circle-outline"
+    | "shield-checkmark-outline"
+    | "eye-off-outline"
+    | "ban-outline"
+    | "person-outline"
+    | "warning-outline";
+  title: string;
+  description: string;
+  important?: boolean;
+};
 
+function GuidelineItem({
+  icon,
+  title,
+  description,
+  important = false,
+}: GuidelineItemProps) {
   return (
-    <SafeAreaView style={styles.safeArea} edges={['top']}>
-      <ScrollView
-        contentContainerStyle={styles.content}
-        showsVerticalScrollIndicator={false}
+    <View
+      style={[
+        styles.guidelineCard,
+        important && styles.importantCard,
+      ]}
+    >
+      <View
+        style={[
+          styles.guidelineIcon,
+          important && styles.importantIcon,
+        ]}
       >
-        <Pressable
-          style={styles.backButton}
-          onPress={() => router.back()}
-          accessibilityRole="button"
-          accessibilityLabel="Return to Profile"
-        >
-          <Ionicons name="arrow-back" size={24} color="#5A3D4D" />
-          <Text style={styles.backText}>Profile</Text>
-        </Pressable>
+        <Ionicons
+          name={icon}
+          size={23}
+          color={
+            important
+              ? Brand.burgundy
+              : Brand.burgundyDeep
+          }
+        />
+      </View>
 
-        <View style={styles.iconContainer}>
-          <Ionicons
-            name="document-text-outline"
-            size={42}
-            color="#A92F61"
-          />
-        </View>
-
-        <Text style={styles.title}>Reporting Guidelines</Text>
-
-        <Text style={styles.introduction}>
-          Responsible reporting helps SafeHer provide useful safety
-          information while reducing harm and misinformation.
+      <View style={styles.guidelineContent}>
+        <Text style={styles.guidelineTitle}>
+          {title}
         </Text>
 
-        {GUIDELINES.map((guideline, index) => (
-          <View
-            key={guideline}
-            style={styles.guideline}
+        <Text style={styles.guidelineDescription}>
+          {description}
+        </Text>
+      </View>
+    </View>
+  );
+}
+
+export default function ReportingGuidelinesScreen() {
+  return (
+    <SafeAreaView style={styles.safeArea}>
+      <StatusBar
+        barStyle="dark-content"
+        backgroundColor={Brand.cream}
+      />
+
+      <View style={styles.screen}>
+        <View style={styles.header}>
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel="Return to incident report"
+            onPress={() => router.back()}
+            style={({ pressed }) => [
+              styles.backButton,
+              pressed && styles.pressed,
+            ]}
           >
-            <View style={styles.numberContainer}>
-              <Text style={styles.number}>{index + 1}</Text>
+            <Ionicons
+              name="arrow-back"
+              size={23}
+              color={Brand.ink}
+            />
+          </Pressable>
+
+          <View style={styles.headerTextContainer}>
+            <Text style={styles.headerTitle}>
+              Reporting Guidelines
+            </Text>
+
+            <Text style={styles.headerSubtitle}>
+              Report responsibly and protect privacy
+            </Text>
+          </View>
+
+          <View style={styles.headerSpacer} />
+        </View>
+
+        <ScrollView
+          showsVerticalScrollIndicator={false}
+          contentContainerStyle={styles.content}
+        >
+          <View style={styles.introCard}>
+            <View style={styles.introIcon}>
+              <Ionicons
+                name="document-text-outline"
+                size={30}
+                color={Brand.burgundy}
+              />
             </View>
 
-            <Text style={styles.guidelineText}>{guideline}</Text>
-          </View>
-        ))}
+            <Text style={styles.introTitle}>
+              Help keep reports safe and useful
+            </Text>
 
-        <View style={styles.emergencyNotice}>
-          <Ionicons
-            name="warning-outline"
-            size={24}
-            color="#B42318"
+            <Text style={styles.introDescription}>
+              SafeHer incident reports help the community
+              understand safety concerns. Please follow these
+              guidelines before submitting a report.
+            </Text>
+          </View>
+
+          <Text style={styles.sectionTitle}>
+            Responsible reporting
+          </Text>
+
+          <GuidelineItem
+            icon="checkmark-circle-outline"
+            title="Report accurate information"
+            description="Only report information that you believe is true. Describe what happened as clearly and accurately as possible."
           />
 
-          <Text style={styles.emergencyText}>
-            If there is immediate danger, contact the appropriate local
-            emergency service first.
+          <GuidelineItem
+            icon="shield-checkmark-outline"
+            title="Respect people's privacy"
+            description="Do not include unnecessary personal information such as full names, phone numbers, home addresses, email addresses or other identifying details."
+          />
+
+          <GuidelineItem
+            icon="eye-off-outline"
+            title="Protect victims and witnesses"
+            description="Never expose private or sensitive information about a victim, witness or another person involved in an incident."
+          />
+
+          <GuidelineItem
+            icon="ban-outline"
+            title="No false or misleading reports"
+            description="Do not knowingly submit false, exaggerated or misleading information. Reports should be made only for genuine safety concerns."
+          />
+
+          <GuidelineItem
+            icon="person-outline"
+            title="No offensive or harmful content"
+            description="Reports must not contain abusive, threatening, discriminatory, sexually explicit or otherwise offensive content."
+          />
+
+          <Text style={styles.sectionTitle}>
+            During an emergency
           </Text>
-        </View>
-      </ScrollView>
+
+          <GuidelineItem
+            icon="warning-outline"
+            title="Immediate danger requires emergency help"
+            description="SafeHer incident reporting is not a replacement for emergency services. If you or someone else is in immediate danger, contact the appropriate emergency service or use the SafeHer SOS feature."
+            important
+          />
+
+          <View style={styles.privacyNotice}>
+            <Ionicons
+              name="lock-closed-outline"
+              size={22}
+              color={Brand.burgundy}
+            />
+
+            <View style={styles.privacyNoticeContent}>
+              <Text style={styles.privacyNoticeTitle}>
+                Privacy reminder
+              </Text>
+
+              <Text style={styles.privacyNoticeText}>
+                Share only the information needed to describe
+                the safety concern. Avoid details that could
+                unnecessarily identify or endanger another
+                person.
+              </Text>
+            </View>
+          </View>
+
+          <View style={styles.summaryCard}>
+            <Text style={styles.summaryTitle}>
+              Before you submit
+            </Text>
+
+            <View style={styles.summaryRow}>
+              <Ionicons
+                name="checkmark-circle"
+                size={18}
+                color={Brand.burgundy}
+              />
+
+              <Text style={styles.summaryText}>
+                Make sure the report is accurate.
+              </Text>
+            </View>
+
+            <View style={styles.summaryRow}>
+              <Ionicons
+                name="checkmark-circle"
+                size={18}
+                color={Brand.burgundy}
+              />
+
+              <Text style={styles.summaryText}>
+                Remove unnecessary personal information.
+              </Text>
+            </View>
+
+            <View style={styles.summaryRow}>
+              <Ionicons
+                name="checkmark-circle"
+                size={18}
+                color={Brand.burgundy}
+              />
+
+              <Text style={styles.summaryText}>
+                Keep the description respectful and relevant.
+              </Text>
+            </View>
+          </View>
+
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel="Return to incident report"
+            onPress={() => router.back()}
+            style={({ pressed }) => [
+              styles.returnButton,
+              pressed && styles.returnButtonPressed,
+            ]}
+          >
+            <Ionicons
+              name="arrow-back-outline"
+              size={19}
+              color={Brand.white}
+            />
+
+            <Text style={styles.returnButtonText}>
+              Return to Report
+            </Text>
+          </Pressable>
+
+          <Text style={styles.footerText}>
+            By submitting an incident report, you confirm that
+            the information follows these reporting guidelines.
+          </Text>
+        </ScrollView>
+      </View>
     </SafeAreaView>
   );
 }
@@ -85,104 +272,243 @@ export default function ReportingGuidelinesScreen() {
 const styles = StyleSheet.create({
   safeArea: {
     flex: 1,
-    backgroundColor: '#FFF8FB',
+    backgroundColor: Brand.cream,
   },
 
-  content: {
-    paddingHorizontal: 20,
-    paddingBottom: 36,
+  screen: {
+    flex: 1,
+    backgroundColor: Brand.cream,
+  },
+
+  header: {
+    minHeight: 72,
+    paddingHorizontal: 18,
+    paddingVertical: 12,
+    backgroundColor: Brand.white,
+    borderBottomWidth: 1,
+    borderBottomColor: Brand.line,
+    flexDirection: "row",
+    alignItems: "center",
   },
 
   backButton: {
-    minHeight: 54,
-    alignSelf: 'flex-start',
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
+    width: 42,
+    height: 42,
+    borderRadius: 21,
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: Brand.blush,
   },
 
-  backText: {
-    color: '#5A3D4D',
-    fontSize: 15,
-    fontWeight: '700',
+  headerTextContainer: {
+    flex: 1,
+    alignItems: "center",
+    paddingHorizontal: 8,
   },
 
-  iconContainer: {
-    width: 78,
-    height: 78,
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginTop: 14,
-    borderRadius: 25,
-    backgroundColor: '#F9E4EE',
+  headerTitle: {
+    color: Brand.ink,
+    fontSize: 20,
+    fontWeight: "800",
   },
 
-  title: {
-    marginTop: 20,
-    color: '#392631',
-    fontSize: 27,
-    fontWeight: '800',
+  headerSubtitle: {
+    color: Brand.muted,
+    fontSize: 12,
+    marginTop: 2,
+    textAlign: "center",
   },
 
-  introduction: {
-    marginTop: 10,
-    marginBottom: 17,
-    color: '#755F6A',
-    fontSize: 15,
-    lineHeight: 23,
+  headerSpacer: {
+    width: 42,
   },
 
-  guideline: {
-    flexDirection: 'row',
-    alignItems: 'flex-start',
-    gap: 12,
-    marginTop: 13,
+  pressed: {
+    opacity: 0.7,
+  },
+
+  content: {
+    paddingHorizontal: 18,
+    paddingTop: 18,
+    paddingBottom: 40,
+  },
+
+  introCard: {
+    backgroundColor: Brand.white,
+    borderWidth: 1,
+    borderColor: Brand.line,
+    borderRadius: 22,
+    padding: 20,
+    alignItems: "center",
+    marginBottom: 22,
+  },
+
+  introIcon: {
+    width: 64,
+    height: 64,
+    borderRadius: 20,
+    backgroundColor: Brand.blush,
+    alignItems: "center",
+    justifyContent: "center",
+    marginBottom: 14,
+  },
+
+  introTitle: {
+    color: Brand.ink,
+    fontSize: 20,
+    fontWeight: "800",
+    textAlign: "center",
+  },
+
+  introDescription: {
+    color: Brand.muted,
+    fontSize: 14,
+    lineHeight: 21,
+    textAlign: "center",
+    marginTop: 8,
+  },
+
+  sectionTitle: {
+    color: Brand.ink,
+    fontSize: 18,
+    fontWeight: "800",
+    marginBottom: 12,
+    marginTop: 2,
+  },
+
+  guidelineCard: {
+    backgroundColor: Brand.white,
+    borderWidth: 1,
+    borderColor: Brand.line,
+    borderRadius: 18,
     padding: 15,
-    borderWidth: 1,
-    borderColor: '#F1DDE6',
-    borderRadius: 18,
-    backgroundColor: '#FFFFFF',
+    marginBottom: 12,
+    flexDirection: "row",
+    alignItems: "flex-start",
   },
 
-  numberContainer: {
-    width: 30,
-    height: 30,
-    alignItems: 'center',
-    justifyContent: 'center',
-    borderRadius: 15,
-    backgroundColor: '#F9E4EE',
+  importantCard: {
+    borderColor: Brand.rose,
+    backgroundColor: Brand.blush,
   },
 
-  number: {
-    color: '#A92F61',
-    fontSize: 13,
-    fontWeight: '800',
+  guidelineIcon: {
+    width: 44,
+    height: 44,
+    borderRadius: 14,
+    backgroundColor: Brand.blush,
+    alignItems: "center",
+    justifyContent: "center",
+    marginRight: 12,
   },
 
-  guidelineText: {
+  importantIcon: {
+    backgroundColor: Brand.white,
+  },
+
+  guidelineContent: {
     flex: 1,
-    color: '#5F4B55',
-    fontSize: 13,
-    lineHeight: 20,
   },
 
-  emergencyNotice: {
-    flexDirection: 'row',
-    alignItems: 'flex-start',
-    gap: 11,
-    marginTop: 22,
+  guidelineTitle: {
+    color: Brand.ink,
+    fontSize: 15,
+    fontWeight: "700",
+  },
+
+  guidelineDescription: {
+    color: Brand.muted,
+    fontSize: 13,
+    lineHeight: 19,
+    marginTop: 5,
+  },
+
+  privacyNotice: {
+    flexDirection: "row",
+    alignItems: "flex-start",
+    backgroundColor: Brand.blush,
+    borderRadius: 18,
+    padding: 15,
+    marginTop: 5,
+    marginBottom: 18,
+  },
+
+  privacyNoticeContent: {
+    flex: 1,
+    marginLeft: 11,
+  },
+
+  privacyNoticeTitle: {
+    color: Brand.burgundyDeep,
+    fontSize: 14,
+    fontWeight: "800",
+  },
+
+  privacyNoticeText: {
+    color: Brand.burgundyDeep,
+    fontSize: 13,
+    lineHeight: 19,
+    marginTop: 4,
+  },
+
+  summaryCard: {
+    backgroundColor: Brand.white,
+    borderWidth: 1,
+    borderColor: Brand.line,
+    borderRadius: 20,
     padding: 16,
-    borderWidth: 1,
-    borderColor: '#FDA29B',
-    borderRadius: 18,
-    backgroundColor: '#FEF3F2',
+    marginBottom: 20,
   },
 
-  emergencyText: {
+  summaryTitle: {
+    color: Brand.ink,
+    fontSize: 16,
+    fontWeight: "800",
+    marginBottom: 12,
+  },
+
+  summaryRow: {
+    flexDirection: "row",
+    alignItems: "flex-start",
+    marginBottom: 9,
+  },
+
+  summaryText: {
     flex: 1,
-    color: '#B42318',
+    color: Brand.muted,
     fontSize: 13,
-    lineHeight: 20,
-    fontWeight: '600',
+    lineHeight: 18,
+    marginLeft: 8,
+  },
+
+  returnButton: {
+    minHeight: 52,
+    borderRadius: 16,
+    backgroundColor: Brand.burgundy,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    paddingHorizontal: 18,
+  },
+
+  returnButtonPressed: {
+    opacity: 0.78,
+  },
+
+  returnButtonText: {
+    color: Brand.white,
+    fontSize: 15,
+    fontWeight: "800",
+    marginLeft: 8,
+  },
+
+  footerText: {
+    color: Brand.muted,
+    fontSize: 12,
+    lineHeight: 18,
+    textAlign: "center",
+    marginTop: 14,
+    paddingHorizontal: 12,
   },
 });
+
