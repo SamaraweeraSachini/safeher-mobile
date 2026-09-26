@@ -49,6 +49,7 @@ export default function SafeRouteScreen() {
   const [destinationError, setDestinationError] = useState('');
   const [isSearching, setIsSearching] = useState(false);
   const [searchMessage, setSearchMessage] = useState('');
+  const [searchError, setSearchError] = useState('');
 
   // SAFE-87 current location state
   const [isGettingLocation, setIsGettingLocation] = useState(false);
@@ -151,6 +152,7 @@ export default function SafeRouteScreen() {
   const handleOriginChange = (text: string) => {
     setOrigin(text);
     setOriginError('');
+    setSearchError('');
     setLocationMessage('');
     setSelectedOrigin(null);
     setOriginCoordinates(null);
@@ -161,6 +163,7 @@ export default function SafeRouteScreen() {
   const handleDestinationChange = (text: string) => {
     setDestination(text);
     setDestinationError('');
+    setSearchError('');
     setSelectedDestination(null);
 
     void searchLocations(text, 'destination');
@@ -188,6 +191,7 @@ export default function SafeRouteScreen() {
 
     setOriginSuggestions([]);
     setOriginError('');
+    setSearchError('');
     setLocationMessage('Origin selected.');
   };
 
@@ -205,10 +209,12 @@ export default function SafeRouteScreen() {
 
     setDestinationSuggestions([]);
     setDestinationError('');
+    setSearchError('');
   };
 
   const handleUseCurrentLocation = async () => {
     setLocationMessage('');
+    setSearchError('');
     setOriginError('');
     setOriginSuggestions([]);
     setIsGettingLocation(true);
@@ -289,20 +295,61 @@ export default function SafeRouteScreen() {
     }
   };
 
+  // SAFE-89: Validate route-search input
   const handleSearch = () => {
+    // Prevent repeated requests while a search is already running.
+    if (isSearching) {
+      return;
+    }
+
     setOriginError('');
     setDestinationError('');
     setSearchMessage('');
+    setSearchError('');
 
     let hasError = false;
 
+    // Requirement 1:
+    // Missing origin must display an error.
     if (!origin.trim()) {
       setOriginError('Please enter your origin.');
       hasError = true;
     }
+    // Requirement 3:
+    // Typed origin must also be selected from the suggestions.
+    else if (!selectedOrigin) {
+      setOriginError(
+        'Please select your origin from the suggestions.',
+      );
+      hasError = true;
+    }
 
+    // Requirement 2:
+    // Missing destination must display an error.
     if (!destination.trim()) {
       setDestinationError('Please enter your destination.');
+      hasError = true;
+    }
+    // Requirement 3:
+    // Typed destination must also be selected from the suggestions.
+    else if (!selectedDestination) {
+      setDestinationError(
+        'Please select your destination from the suggestions.',
+      );
+      hasError = true;
+    }
+
+    // Requirement 4:
+    // Origin and destination cannot represent the same coordinates.
+    if (
+      selectedOrigin &&
+      selectedDestination &&
+      selectedOrigin.latitude === selectedDestination.latitude &&
+      selectedOrigin.longitude === selectedDestination.longitude
+    ) {
+      setDestinationError(
+        'Origin and destination cannot be the same location.',
+      );
       hasError = true;
     }
 
@@ -312,12 +359,38 @@ export default function SafeRouteScreen() {
 
     setIsSearching(true);
 
+    /*
+     * Temporary route-search state.
+     *
+     * The actual routing service will be connected during route-engine
+     * integration. For the current Sprint 3 screen, the existing route
+     * options are used to demonstrate the loading/success/failure states.
+     */
     setTimeout(() => {
       setIsSearching(false);
+
+      // Requirement 6:
+      // Show a failure state when no route options are available.
+      if (routes.length === 0) {
+        setSearchError(
+          'Unable to find routes for these locations. Please try again.',
+        );
+        return;
+      }
+
       setSearchMessage(
         'Routes found. Available route options are shown below.',
       );
     }, 800);
+  };
+
+  // SAFE-89: Try Again after route-search failure
+  const handleRetrySearch = () => {
+    if (isSearching) {
+      return;
+    }
+
+    handleSearch();
   };
 
   const handleClear = () => {
@@ -326,6 +399,7 @@ export default function SafeRouteScreen() {
     setOriginError('');
     setDestinationError('');
     setSearchMessage('');
+    setSearchError('');
     setLocationMessage('');
     setOriginCoordinates(null);
 
@@ -349,6 +423,7 @@ export default function SafeRouteScreen() {
     setOriginError('');
     setDestinationError('');
     setSearchMessage('');
+    setSearchError('');
     setLocationMessage('');
 
     setOriginSuggestions([]);
@@ -631,6 +706,27 @@ export default function SafeRouteScreen() {
               {searchMessage}
             </Text>
           ) : null}
+
+          {searchError ? (
+            <View style={styles.searchErrorContainer}>
+              <Text style={styles.searchErrorText}>
+                {searchError}
+              </Text>
+
+              <Pressable
+                style={({ pressed }) => [
+                  styles.retryButton,
+                  pressed && styles.pressed,
+                ]}
+                onPress={handleRetrySearch}
+                disabled={isSearching}
+                accessibilityRole="button"
+                accessibilityLabel="Try searching for routes again"
+              >
+                <Text style={styles.retryText}>Try Again</Text>
+              </Pressable>
+            </View>
+          ) : null}
         </View>
 
         {isLoading && routes.length === 0 && (
@@ -912,6 +1008,19 @@ const styles = StyleSheet.create({
   messageText: {
     marginTop: 12,
     color: '#5A3D4D',
+    fontSize: 13,
+    lineHeight: 19,
+    textAlign: 'center',
+  },
+
+  searchErrorContainer: {
+    marginTop: 12,
+    alignItems: 'center',
+    gap: 10,
+  },
+
+  searchErrorText: {
+    color: '#C43D74',
     fontSize: 13,
     lineHeight: 19,
     textAlign: 'center',
