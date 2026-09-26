@@ -1,52 +1,116 @@
 import assert from 'node:assert/strict';
 
-import { identifyRouteChoices } from '../src/services/route-comparison-service';
+import {
+  identifyRouteChoices,
+} from '../src/services/route-comparison-service';
+
+import type {
+  RouteOption,
+} from '../src/types/route';
+
+function createRoute(
+  id: string,
+  durationSeconds: number,
+  safetyScore: number
+): RouteOption {
+  return {
+    id,
+    type: 'balanced',
+    coordinates: [
+      {
+        latitude: 6.9271,
+        longitude: 79.8612,
+      },
+      {
+        latitude: 6.9281,
+        longitude: 79.8622,
+      },
+    ],
+    distanceMeters: 1000,
+    durationSeconds,
+    safetyScore,
+    nearbyIncidentCount: 0,
+  };
+}
 
 const routes = identifyRouteChoices([
-  { id: 'A', durationMinutes: 10, safetyScore: 60 },
-  { id: 'B', durationMinutes: 20, safetyScore: 95 },
-  { id: 'C', durationMinutes: 12, safetyScore: 82 },
-  { id: 'D', durationMinutes: 25, safetyScore: 40 },
+  createRoute('A', 600, 60),
+  createRoute('B', 1200, 95),
+  createRoute('C', 720, 82),
+  createRoute('D', 1500, 40),
 ]);
 
-const byId = (id: string) => routes.find((route) => route.id === id);
+const byId = (id: string) =>
+  routes.find((route) => route.id === id);
 
-assert.equal(byId('A')?.label, 'Fastest');
-assert.equal(byId('B')?.label, 'Safest');
-assert.equal(byId('C')?.label, 'Balanced');
-assert.equal(byId('D')?.label, 'Alternative 1');
 assert.equal(
-  new Set(routes.map((route) => route.label)).size,
+  byId('A')?.label,
+  'Fastest'
+);
+
+assert.equal(
+  byId('B')?.label,
+  'Safest'
+);
+
+assert.equal(
+  byId('C')?.label,
+  'Balanced'
+);
+
+assert.equal(
+  byId('D')?.label,
+  'Alternative 1'
+);
+
+assert.equal(
+  new Set(
+    routes.map((route) => route.label)
+  ).size,
   routes.length
 );
 
 // One route can genuinely win all three roles.
 const dominant = identifyRouteChoices([
-  { id: 'X', durationMinutes: 10, safetyScore: 95 },
-  { id: 'Y', durationMinutes: 15, safetyScore: 70 },
+  createRoute('X', 600, 95),
+  createRoute('Y', 900, 70),
 ]);
 
 assert.equal(
   dominant[0].label,
   'Fastest & Safest & Balanced'
 );
-assert.equal(dominant[1].label, 'Alternative 1');
 
-// With equal travel time, prefer the safer route consistently.
+assert.equal(
+  dominant[1].label,
+  'Alternative 1'
+);
+
+// Equal travel time should prefer the safer route.
 const tied = identifyRouteChoices([
-  { id: 'less-safe', durationMinutes: 10, safetyScore: 50 },
-  { id: 'safer', durationMinutes: 10, safetyScore: 80 },
+  createRoute('less-safe', 600, 50),
+  createRoute('safer', 600, 80),
 ]);
 
-assert.ok(tied[1].roles.includes('Fastest'));
-assert.ok(tied[1].roles.includes('Safest'));
+assert.ok(
+  tied[1].roles.includes('Fastest')
+);
 
-assert.deepEqual(identifyRouteChoices([]), []);
+assert.ok(
+  tied[1].roles.includes('Safest')
+);
+
+assert.deepEqual(
+  identifyRouteChoices([]),
+  []
+);
 
 assert.throws(() =>
   identifyRouteChoices([
-    { id: 'invalid', durationMinutes: 0, safetyScore: 80 },
+    createRoute('invalid', 0, 80),
   ])
 );
 
-console.log('SAFE-92: all route comparison checks passed.');
+console.log(
+  'SAFE-92: all route comparison checks passed.'
+);
