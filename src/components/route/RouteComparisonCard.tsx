@@ -2,6 +2,7 @@ import { Pressable, StyleSheet, Text, View } from 'react-native';
 
 import { Brand } from '@/constants/brand';
 import SafetyScoreBadge from '@/src/components/route/SafetyScoreBadge';
+import SafetyScoreExplanation from '@/src/components/route/SafetyScoreExplanation';
 import type { RouteChoiceInput } from '@/src/services/route-comparison-service';
 import type { SafetyLevel } from '@/src/services/safety-score-service';
 
@@ -56,6 +57,8 @@ export default function RouteComparisonCard({
         score={route.safetyScore}
         level={route.safetyLevel}
       />
+
+      <SafetyScoreExplanation />
 
       <Text style={styles.incidents}>
         Nearby reports: {route.nearbyIncidentCount}
