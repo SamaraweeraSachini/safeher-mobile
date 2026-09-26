@@ -1,11 +1,11 @@
 import {
-    ROUTE_WARNING_RADIUS_METERS,
     getWarningGuidance,
     getWarningLevel,
     getWarningMessage,
 } from '@/constants/route-warnings';
 
-import { distanceToRouteMeters } from '@/src/utils/geo';
+import { isIncidentNearRoute } from '@/src/services/safety-score-service';
+import { distanceToRouteMetres } from '@/src/utils/distance-calculation';
 
 import type {
     Incident,
@@ -36,17 +36,14 @@ function groupNearbyIncidentsByType(
   const groups = new Map<IncidentCategoryId, NearbyIncidentGroup>();
 
   incidents.forEach((incident) => {
-    const distanceMeters = distanceToRouteMeters(
+    if (!isIncidentNearRoute(incident, route.coordinates)) {
+      return;
+    }
+
+    const distanceMeters = distanceToRouteMetres(
       incident.coordinates,
       route.coordinates
     );
-
-    if (
-      distanceMeters === null ||
-      distanceMeters > ROUTE_WARNING_RADIUS_METERS
-    ) {
-      return;
-    }
 
     const existingGroup = groups.get(incident.type);
 
@@ -69,41 +66,6 @@ function groupNearbyIncidentsByType(
   });
 
   return groups;
-}
-
-/**
- * Builds a demo route that passes through real Firestore incident
- * coordinates so SAFE-95 warning cards can be checked before the real
- * selected-route screen exists.
- */
-export function buildPreviewRouteFromIncidents(
-  incidents: Incident[]
-): RouteOption | null {
-  if (incidents.length === 0) {
-    return null;
-  }
-
-  const coordinates = incidents.slice(0, 4).map((incident) => ({
-    latitude: incident.coordinates.latitude,
-    longitude: incident.coordinates.longitude,
-  }));
-
-  if (coordinates.length === 1) {
-    coordinates.push({
-      latitude: coordinates[0].latitude + 0.001,
-      longitude: coordinates[0].longitude + 0.001,
-    });
-  }
-
-  return {
-    id: 'preview-route-safe-95',
-    type: 'balanced',
-    coordinates,
-    distanceMeters: 1200,
-    durationSeconds: 900,
-    safetyScore: 100,
-    nearbyIncidentCount: incidents.length,
-  };
 }
 
 /**

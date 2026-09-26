@@ -24,11 +24,20 @@ export default function RouteWarningsList({
   error,
   onRetry,
 }: RouteWarningsListProps) {
+  const reportedIncidentCount = warnings.reduce(
+    (total, warning) => total + warning.recentReportCount,
+    0
+  );
+
   return (
     <View style={styles.container}>
       <View style={styles.header}>
         <Ionicons name="shield-outline" size={18} color="#742443" />
-        <Text style={styles.title}>Safety warnings for this route</Text>
+        <Text style={styles.title}>
+          {reportedIncidentCount > 0
+            ? `Safety warnings · ${reportedIncidentCount} nearby incidents`
+            : 'Safety warnings for this route'}
+        </Text>
       </View>
 
       {isLoading && warnings.length === 0 && (

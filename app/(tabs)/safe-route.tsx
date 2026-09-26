@@ -1,6 +1,7 @@
-import { Ionicons } from '@expo/vector-icons';
-import { useRouter } from 'expo-router';
+import { type Href, useRouter } from 'expo-router';
+import { useMemo, useState } from 'react';
 import {
+  ActivityIndicator,
   Pressable,
   ScrollView,
   StyleSheet,
@@ -9,66 +10,92 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
-import RouteWarningsList from '@/src/components/route/RouteWarningsList';
-import { usePreviewRouteWarnings } from '@/src/hooks/useRouteWarnings';
+import RouteChoiceCard from '@/src/components/route/RouteChoiceCard';
+import { useActiveIncidents } from '@/src/hooks/useRecentIncidents';
+import { placeLabel } from '@/src/services/reviewed-route-service';
+import { buildSelectableRoutes } from '@/src/services/route-options-service';
+import { setSelectedRouteReview } from '@/src/state/selected-route';
+
+import type { RouteOption } from '@/src/types/route';
 
 export default function SafeRouteScreen() {
   const router = useRouter();
-  const { warnings, isLoading, error, retry, incidentCount } =
-    usePreviewRouteWarnings();
+  const { incidents, isLoading, error, retry } = useActiveIncidents();
+  const routes = useMemo(() => buildSelectableRoutes(incidents), [incidents]);
+  const [openingRouteId, setOpeningRouteId] = useState<string | null>(null);
+
+  const reviewRoute = async (route: RouteOption) => {
+    setOpeningRouteId(route.id);
+
+    const start = route.coordinates[0];
+    const end = route.coordinates[route.coordinates.length - 1];
+    const [originLabel, destinationLabel] = await Promise.all([
+      placeLabel(start, 'Starting point'),
+      placeLabel(end, 'Destination'),
+    ]);
+
+    setSelectedRouteReview({
+      originLabel,
+      destinationLabel,
+      route,
+    });
+    router.push('/route-summary' as Href);
+    setOpeningRouteId(null);
+  };
 
   return (
     <SafeAreaView style={styles.safeArea} edges={['top']}>
-      <Pressable
-        style={styles.backButton}
-        onPress={() => router.back()}
-        accessibilityRole="button"
-        accessibilityLabel="Go back"
-      >
-        <Ionicons name="arrow-back" size={24} color="#5A3D4D" />
-        <Text style={styles.backText}>Back</Text>
-      </Pressable>
-
       <ScrollView
         contentContainerStyle={styles.content}
         showsVerticalScrollIndicator={false}
       >
         <Text style={styles.heading}>Safe Route</Text>
         <Text style={styles.subheading}>
-          Safety warnings for a demo route that passes the incident reports
-          already saved in Firestore.
+          Choose Fastest, Safest, or Balanced. Each route is based on recent
+          incident reports from the community.
         </Text>
 
-        {!isLoading && !error && incidentCount === 0 && (
-          <View style={styles.notice}>
-            <Text style={styles.noticeText}>
-              There are no active incident reports yet, so no warning cards
-              can appear. Open Report Incident, submit a report, then come
-              back here.
-            </Text>
+        {isLoading && routes.length === 0 && (
+          <View style={styles.stateCard}>
+            <ActivityIndicator color="#C43D74" />
+            <Text style={styles.stateText}>Loading reported incidents…</Text>
+          </View>
+        )}
 
+        {!isLoading && error && routes.length === 0 && (
+          <View style={styles.stateCard}>
+            <Text style={styles.stateText}>{error}</Text>
             <Pressable
               style={({ pressed }) => [
-                styles.noticeButton,
-                pressed && styles.buttonPressed,
+                styles.retryButton,
+                pressed && styles.pressed,
               ]}
-              onPress={() => router.push('/report')}
+              onPress={retry}
               accessibilityRole="button"
-              accessibilityLabel="Open Report Incident"
+              accessibilityLabel="Try loading routes again"
             >
-              <Text style={styles.noticeButtonText}>Report Incident</Text>
+              <Text style={styles.retryText}>Try Again</Text>
             </Pressable>
           </View>
         )}
 
-        {(isLoading || error || incidentCount > 0) && (
-          <RouteWarningsList
-            warnings={warnings}
-            isLoading={isLoading}
-            error={error}
-            onRetry={retry}
-          />
+        {!isLoading && !error && routes.length === 0 && (
+          <View style={styles.stateCard}>
+            <Text style={styles.stateText}>
+              Routes appear here once people have shared recent incident
+              reports.
+            </Text>
+          </View>
         )}
+
+        {routes.map((route) => (
+          <View key={route.id}>
+            <RouteChoiceCard
+              route={route}
+              onReview={openingRouteId ? () => undefined : reviewRoute}
+            />
+          </View>
+        ))}
       </ScrollView>
     </SafeAreaView>
   );
@@ -79,72 +106,48 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: '#FFF8FB',
   },
-
-  backButton: {
-    alignSelf: 'flex-start',
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 7,
-    minHeight: 44,
-    marginLeft: 18,
-    marginTop: 4,
-    paddingHorizontal: 10,
-    borderRadius: 12,
-  },
-
-  backText: {
-    color: '#5A3D4D',
-    fontSize: 15,
-    fontWeight: '700',
-  },
-
   content: {
     paddingHorizontal: 20,
-    paddingBottom: 32,
+    paddingTop: 12,
+    paddingBottom: 28,
   },
-
   heading: {
     color: '#32252B',
-    fontSize: 24,
+    fontSize: 28,
     fontWeight: '900',
   },
-
   subheading: {
     marginTop: 6,
     marginBottom: 18,
     color: '#5D4B53',
-    fontSize: 13,
-    lineHeight: 19,
+    fontSize: 14,
+    lineHeight: 20,
   },
-
-  notice: {
-    padding: 14,
-    borderRadius: 14,
-    backgroundColor: '#FBEAF1',
+  stateCard: {
+    alignItems: 'center',
+    gap: 12,
+    padding: 20,
+    borderRadius: 16,
+    backgroundColor: '#FFFFFF',
   },
-
-  noticeText: {
-    color: '#742443',
-    fontSize: 13,
-    lineHeight: 19,
+  stateText: {
+    color: '#5D4B53',
+    fontSize: 14,
+    lineHeight: 20,
+    textAlign: 'center',
   },
-
-  noticeButton: {
-    marginTop: 12,
-    alignSelf: 'flex-start',
-    paddingHorizontal: 16,
-    paddingVertical: 10,
+  retryButton: {
+    paddingHorizontal: 18,
+    paddingVertical: 12,
     borderRadius: 12,
     backgroundColor: '#C43D74',
   },
-
-  buttonPressed: {
-    opacity: 0.7,
-  },
-
-  noticeButtonText: {
+  retryText: {
     color: '#FFFFFF',
-    fontSize: 13,
-    fontWeight: '700',
+    fontSize: 14,
+    fontWeight: '800',
+  },
+  pressed: {
+    opacity: 0.75,
   },
 });
