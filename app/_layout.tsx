@@ -2,7 +2,7 @@ import {
   DarkTheme,
   DefaultTheme,
   ThemeProvider,
-} from 'expo-router/react-navigation';
+} from '@react-navigation/native';
 
 import { Stack } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
@@ -67,8 +67,6 @@ function RootNavigator() {
         <Stack.Protected guard={isAuthenticated}>
           <Stack.Screen name="(tabs)" />
 
-          <Stack.Screen name="route-warnings-preview" />
-
           <Stack.Screen
             name="modal"
             options={{
@@ -99,3 +97,4 @@ const styles = StyleSheet.create({
     backgroundColor: '#FFF8FB',
   },
 });
+

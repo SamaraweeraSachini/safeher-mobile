@@ -44,11 +44,7 @@
         {
           "locationWhenInUsePermission": "SafeHer uses your location to support the Safety Map and safer journey features."
         }
-      ],
-      "expo-font",
-      "expo-image",
-      "expo-status-bar",
-      "expo-web-browser"
+      ]
     ],
     "experiments": {
       "typedRoutes": true,
