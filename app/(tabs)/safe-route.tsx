@@ -1,5 +1,6 @@
 import { type Href, useRouter } from 'expo-router';
 import { useMemo, useState } from 'react';
+import * as Location from 'expo-location';
 import {
   ActivityIndicator,
   Pressable,
@@ -38,6 +39,73 @@ export default function SafeRouteScreen() {
   const [destinationError, setDestinationError] = useState('');
   const [isSearching, setIsSearching] = useState(false);
   const [searchMessage, setSearchMessage] = useState('');
+
+  // SAFE-87 current location state
+  const [isGettingLocation, setIsGettingLocation] = useState(false);
+  const [locationMessage, setLocationMessage] = useState('');
+  const [originCoordinates, setOriginCoordinates] =
+    useState<Location.LocationObjectCoords | null>(null);
+
+  const handleUseCurrentLocation = async () => {
+    setLocationMessage('');
+    setOriginError('');
+    setIsGettingLocation(true);
+
+    try {
+      const { status } =
+        await Location.requestForegroundPermissionsAsync();
+
+      if (status !== 'granted') {
+        setLocationMessage(
+          'Location permission was denied. Please enter your origin manually.',
+        );
+        return;
+      }
+
+      const location = await Location.getCurrentPositionAsync({
+        accuracy: Location.Accuracy.Balanced,
+      });
+
+      const { latitude, longitude } = location.coords;
+
+      setOriginCoordinates(location.coords);
+
+      try {
+        const [address] = await Location.reverseGeocodeAsync({
+          latitude,
+          longitude,
+        });
+
+        if (address) {
+          const parts = [
+            address.name,
+            address.street,
+            address.city,
+            address.region,
+          ].filter(Boolean);
+
+          const locationName = parts.join(', ');
+
+          setOrigin(
+            locationName ||
+              `${latitude.toFixed(6)}, ${longitude.toFixed(6)}`,
+          );
+        } else {
+          setOrigin(`${latitude.toFixed(6)}, ${longitude.toFixed(6)}`);
+        }
+      } catch {
+        setOrigin(`${latitude.toFixed(6)}, ${longitude.toFixed(6)}`);
+      }
+
+      setLocationMessage('Current location set as your origin.');
+    } catch {
+      setLocationMessage(
+        'Unable to retrieve your current location. Please enter your origin manually.',
+      );
+    } finally {
+      setIsGettingLocation(false);
+    }
+  };
 
   const handleSearch = () => {
     setOriginError('');
@@ -78,6 +146,8 @@ export default function SafeRouteScreen() {
     setOriginError('');
     setDestinationError('');
     setSearchMessage('');
+    setLocationMessage('');
+    setOriginCoordinates(null);
   };
 
   const handleSwap = () => {
@@ -89,6 +159,8 @@ export default function SafeRouteScreen() {
     setOriginError('');
     setDestinationError('');
     setSearchMessage('');
+    setLocationMessage('');
+    setOriginCoordinates(null);
   };
 
   const reviewRoute = async (route: RouteOption) => {
@@ -146,6 +218,14 @@ export default function SafeRouteScreen() {
                 if (originError) {
                   setOriginError('');
                 }
+
+                if (locationMessage) {
+                  setLocationMessage('');
+                }
+
+                if (originCoordinates) {
+                  setOriginCoordinates(null);
+                }
               }}
               placeholder="Enter starting location"
               placeholderTextColor="#9A8790"
@@ -155,6 +235,41 @@ export default function SafeRouteScreen() {
 
           {originError ? (
             <Text style={styles.errorText}>{originError}</Text>
+          ) : null}
+
+          {/* SAFE-87: Use Current Location */}
+          <Pressable
+            style={({ pressed }) => [
+              styles.locationButton,
+              pressed && styles.pressed,
+              isGettingLocation && styles.disabledButton,
+            ]}
+            onPress={handleUseCurrentLocation}
+            disabled={isGettingLocation}
+            accessibilityRole="button"
+            accessibilityLabel="Use current location as origin"
+          >
+            {isGettingLocation ? (
+              <>
+                <ActivityIndicator size="small" color="#C43D74" />
+                <Text style={styles.locationButtonText}>
+                  Getting Current Location...
+                </Text>
+              </>
+            ) : (
+              <>
+                <Text style={styles.locationIcon}>⌖</Text>
+                <Text style={styles.locationButtonText}>
+                  Use Current Location
+                </Text>
+              </>
+            )}
+          </Pressable>
+
+          {locationMessage ? (
+            <Text style={styles.locationMessage}>
+              {locationMessage}
+            </Text>
           ) : null}
 
           {/* Swap button */}
@@ -380,6 +495,38 @@ const styles = StyleSheet.create({
     marginTop: 6,
     color: '#C43D74',
     fontSize: 13,
+  },
+
+  locationButton: {
+    minHeight: 46,
+    marginTop: 10,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+    borderWidth: 1,
+    borderColor: '#E7B7C9',
+    borderRadius: 12,
+    backgroundColor: '#FFF6F9',
+  },
+
+  locationButtonText: {
+    color: '#C43D74',
+    fontSize: 14,
+    fontWeight: '700',
+  },
+
+  locationIcon: {
+    color: '#C43D74',
+    fontSize: 20,
+  },
+
+  locationMessage: {
+    marginTop: 8,
+    color: '#5D4B53',
+    fontSize: 13,
+    lineHeight: 18,
+    textAlign: 'center',
   },
 
   swapRow: {
