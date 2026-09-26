@@ -2,15 +2,12 @@ import { Pressable, StyleSheet, Text, View } from 'react-native';
 
 import { Brand } from '@/constants/brand';
 import SafetyScoreBadge from '@/src/components/route/SafetyScoreBadge';
-import SafetyScoreExplanation from '@/src/components/route/SafetyScoreExplanation';
-import type { RouteChoiceInput } from '@/src/services/route-comparison-service';
 import type { SafetyLevel } from '@/src/services/safety-score-service';
+import type { RouteOption } from '@/src/types/route';
 
-export type RouteComparisonCardData = RouteChoiceInput & {
+export type RouteComparisonCardData = RouteOption & {
   name: string;
   label: string;
-  distanceKm: number;
-  nearbyIncidentCount: number;
   safetyLevel: SafetyLevel;
 };
 
@@ -40,19 +37,20 @@ export default function RouteComparisonCard({
         <View style={styles.detail}>
           <Text style={styles.detailLabel}>Distance</Text>
           <Text style={styles.detailValue}>
-            {route.distanceKm.toFixed(1)} km
+            {(route.distanceMeters / 1000).toFixed(1)} km
           </Text>
         </View>
 
         <View style={styles.detail}>
           <Text style={styles.detailLabel}>Estimated time</Text>
           <Text style={styles.detailValue}>
-            {Math.round(route.durationMinutes)} min
+            {Math.round(route.durationSeconds / 60)} min
           </Text>
         </View>
       </View>
 
       <Text style={styles.sectionLabel}>Safety score</Text>
+
       <SafetyScoreBadge
         score={route.safetyScore}
         level={route.safetyLevel}
@@ -91,63 +89,76 @@ const styles = StyleSheet.create({
     marginBottom: 14,
     padding: 18,
   },
+
   selectedCard: {
     borderColor: Brand.burgundy,
     borderWidth: 2,
   },
+
   heading: {
     alignItems: 'flex-start',
     flexDirection: 'row',
     justifyContent: 'space-between',
   },
+
   headingText: {
     flex: 1,
     paddingRight: 8,
   },
+
   name: {
     color: Brand.ink,
     fontSize: 18,
     fontWeight: '700',
   },
+
   label: {
     color: Brand.burgundy,
     fontSize: 13,
     fontWeight: '600',
     marginTop: 4,
   },
+
   selectedTag: {
     color: Brand.burgundy,
     fontSize: 12,
     fontWeight: '700',
   },
+
   details: {
     flexDirection: 'row',
     marginTop: 18,
   },
+
   detail: {
     flex: 1,
   },
+
   detailLabel: {
     color: Brand.muted,
     fontSize: 12,
   },
+
   detailValue: {
     color: Brand.ink,
     fontSize: 16,
     fontWeight: '600',
     marginTop: 4,
   },
+
   sectionLabel: {
     color: Brand.muted,
     fontSize: 12,
     marginBottom: 7,
     marginTop: 18,
   },
+
   incidents: {
     color: Brand.muted,
     fontSize: 13,
     marginTop: 14,
   },
+
   button: {
     alignItems: 'center',
     backgroundColor: Brand.burgundy,
@@ -155,9 +166,11 @@ const styles = StyleSheet.create({
     marginTop: 18,
     paddingVertical: 13,
   },
+
   selectedButton: {
     backgroundColor: Brand.burgundyDeep,
   },
+
   buttonText: {
     color: Brand.white,
     fontSize: 14,
