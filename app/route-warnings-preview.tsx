@@ -1,18 +1,12 @@
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
-import {
-  Pressable,
-  ScrollView,
-  StyleSheet,
-  Text,
-  View,
-} from 'react-native';
+import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import RouteWarningsList from '@/src/components/route/RouteWarningsList';
 import { usePreviewRouteWarnings } from '@/src/hooks/useRouteWarnings';
 
-export default function SafeRouteScreen() {
+export default function RouteWarningsPreviewScreen() {
   const router = useRouter();
   const { warnings, isLoading, error, retry, incidentCount } =
     usePreviewRouteWarnings();
@@ -29,35 +23,19 @@ export default function SafeRouteScreen() {
         <Text style={styles.backText}>Back</Text>
       </Pressable>
 
-      <ScrollView
-        contentContainerStyle={styles.content}
-        showsVerticalScrollIndicator={false}
-      >
-        <Text style={styles.heading}>Safe Route</Text>
+      <ScrollView contentContainerStyle={styles.content}>
+        <Text style={styles.heading}>SAFE-95 preview</Text>
         <Text style={styles.subheading}>
-          Safety warnings for a demo route that passes the incident reports
-          already saved in Firestore.
+          Demo route through real Firestore incidents. The selected-route
+          screen in SAFE-96 will replace this preview.
         </Text>
 
         {!isLoading && !error && incidentCount === 0 && (
           <View style={styles.notice}>
             <Text style={styles.noticeText}>
-              There are no active incident reports yet, so no warning cards
-              can appear. Open Report Incident, submit a report, then come
-              back here.
+              Submit at least one incident report, then return here to see
+              warning cards.
             </Text>
-
-            <Pressable
-              style={({ pressed }) => [
-                styles.noticeButton,
-                pressed && styles.buttonPressed,
-              ]}
-              onPress={() => router.push('/report')}
-              accessibilityRole="button"
-              accessibilityLabel="Open Report Incident"
-            >
-              <Text style={styles.noticeButtonText}>Report Incident</Text>
-            </Pressable>
           </View>
         )}
 
@@ -99,22 +77,20 @@ const styles = StyleSheet.create({
   },
 
   content: {
-    paddingHorizontal: 20,
-    paddingBottom: 32,
+    padding: 20,
   },
 
   heading: {
     color: '#32252B',
-    fontSize: 24,
+    fontSize: 20,
     fontWeight: '900',
   },
 
   subheading: {
-    marginTop: 6,
+    marginTop: 4,
     marginBottom: 18,
     color: '#5D4B53',
     fontSize: 13,
-    lineHeight: 19,
   },
 
   notice: {
@@ -126,25 +102,5 @@ const styles = StyleSheet.create({
   noticeText: {
     color: '#742443',
     fontSize: 13,
-    lineHeight: 19,
-  },
-
-  noticeButton: {
-    marginTop: 12,
-    alignSelf: 'flex-start',
-    paddingHorizontal: 16,
-    paddingVertical: 10,
-    borderRadius: 12,
-    backgroundColor: '#C43D74',
-  },
-
-  buttonPressed: {
-    opacity: 0.7,
-  },
-
-  noticeButtonText: {
-    color: '#FFFFFF',
-    fontSize: 13,
-    fontWeight: '700',
   },
 });
