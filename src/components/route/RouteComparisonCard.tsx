@@ -56,6 +56,8 @@ export default function RouteComparisonCard({
         level={route.safetyLevel}
       />
 
+      <SafetyScoreExplanation />
+
       <Text style={styles.incidents}>
         Nearby reports: {route.nearbyIncidentCount}
       </Text>
