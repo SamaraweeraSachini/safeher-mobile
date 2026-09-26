@@ -109,3 +109,39 @@ export function distanceToRouteMeters(
 
   return shortestDistanceMeters;
 }
+
+export function remainingDistanceAlongRoute(
+  point: RouteCoordinate,
+  routeCoordinates: RouteCoordinate[]
+): number {
+  if (routeCoordinates.length === 0) {
+    return 0;
+  }
+
+  if (routeCoordinates.length === 1) {
+    return haversineDistanceMeters(point, routeCoordinates[0]);
+  }
+
+  let closestIndex = 0;
+  let closestDistance = Infinity;
+
+  routeCoordinates.forEach((coordinate, index) => {
+    const distance = haversineDistanceMeters(point, coordinate);
+
+    if (distance < closestDistance) {
+      closestDistance = distance;
+      closestIndex = index;
+    }
+  });
+
+  let remainingMeters = closestDistance;
+
+  for (let index = closestIndex + 1; index < routeCoordinates.length; index += 1) {
+    remainingMeters += haversineDistanceMeters(
+      routeCoordinates[index - 1],
+      routeCoordinates[index]
+    );
+  }
+
+  return remainingMeters;
+}

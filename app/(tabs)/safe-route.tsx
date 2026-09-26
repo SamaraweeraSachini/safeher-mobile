@@ -1,5 +1,5 @@
 import { type Href, useRouter } from 'expo-router';
-import { useMemo, useState } from 'react';
+import { useMemo } from 'react';
 import {
   ActivityIndicator,
   Pressable,
@@ -14,7 +14,10 @@ import RouteChoiceCard from '@/src/components/route/RouteChoiceCard';
 import { useActiveIncidents } from '@/src/hooks/useRecentIncidents';
 import { placeLabel } from '@/src/services/reviewed-route-service';
 import { buildSelectableRoutes } from '@/src/services/route-options-service';
-import { setSelectedRouteReview } from '@/src/state/selected-route';
+import {
+  getSelectedRouteReview,
+  setSelectedRouteReview,
+} from '@/src/state/selected-route';
 
 import type { RouteOption } from '@/src/types/route';
 
@@ -22,25 +25,32 @@ export default function SafeRouteScreen() {
   const router = useRouter();
   const { incidents, isLoading, error, retry } = useActiveIncidents();
   const routes = useMemo(() => buildSelectableRoutes(incidents), [incidents]);
-  const [openingRouteId, setOpeningRouteId] = useState<string | null>(null);
 
-  const reviewRoute = async (route: RouteOption) => {
-    setOpeningRouteId(route.id);
-
+  const reviewRoute = (route: RouteOption) => {
     const start = route.coordinates[0];
     const end = route.coordinates[route.coordinates.length - 1];
-    const [originLabel, destinationLabel] = await Promise.all([
-      placeLabel(start, 'Starting point'),
-      placeLabel(end, 'Destination'),
-    ]);
 
     setSelectedRouteReview({
-      originLabel,
-      destinationLabel,
+      originLabel: 'Starting point',
+      destinationLabel: 'Destination',
       route,
     });
     router.push('/route-summary' as Href);
-    setOpeningRouteId(null);
+
+    void Promise.all([
+      placeLabel(start, 'Starting point'),
+      placeLabel(end, 'Destination'),
+    ]).then(([originLabel, destinationLabel]) => {
+      if (getSelectedRouteReview()?.route.id !== route.id) {
+        return;
+      }
+
+      setSelectedRouteReview({
+        originLabel,
+        destinationLabel,
+        route,
+      });
+    });
   };
 
   return (
@@ -92,7 +102,7 @@ export default function SafeRouteScreen() {
           <View key={route.id}>
             <RouteChoiceCard
               route={route}
-              onReview={openingRouteId ? () => undefined : reviewRoute}
+              onReview={reviewRoute}
             />
           </View>
         ))}
