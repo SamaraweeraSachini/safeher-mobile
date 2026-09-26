@@ -60,6 +60,25 @@ function getAgeMultiplier(
   return 0;
 }
 
+export function isIncidentNearRoute(
+  incident: Incident,
+  routeCoordinates: readonly IncidentCoordinates[],
+  now: Date = new Date()
+): boolean {
+  if (incident.status !== 'active') {
+    return false;
+  }
+
+  if (getAgeMultiplier(incident, now) === 0) {
+    return false;
+  }
+
+  return (
+    distanceToRouteMetres(incident.coordinates, routeCoordinates) <=
+    ROUTE_SCORING_RULES.nearbyDistanceMetres
+  );
+}
+
 /**
  * Scores one route against active, recent incidents.
  *
@@ -82,26 +101,13 @@ export function calculateRouteSafetyScore(
 
   for (const incident of incidents) {
     if (
-      incident.status !== 'active' ||
-      countedIncidentIds.has(incident.id)
+      countedIncidentIds.has(incident.id) ||
+      !isIncidentNearRoute(incident, routeCoordinates, now)
     ) {
       continue;
     }
 
     const ageMultiplier = getAgeMultiplier(incident, now);
-
-    if (ageMultiplier === 0) {
-      continue;
-    }
-
-    const distance = distanceToRouteMetres(
-      incident.coordinates,
-      routeCoordinates
-    );
-
-    if (distance > ROUTE_SCORING_RULES.nearbyDistanceMetres) {
-      continue;
-    }
 
     countedIncidentIds.add(incident.id);
     nearbyIncidentCount += 1;

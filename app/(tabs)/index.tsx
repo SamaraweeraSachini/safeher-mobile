@@ -48,7 +48,7 @@ const FEATURES: FeatureCard[] = [
   {
     id: 'safe-route',
     title: 'Safe Route',
-    description: 'Find a safer route to your destination',
+    description: 'Compare routes using recent safety reports',
     icon: 'navigate-outline',
     color: '#38785A',
     backgroundColor: '#E8F5ED',

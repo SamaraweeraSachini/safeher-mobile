@@ -67,6 +67,10 @@ function RootNavigator() {
         <Stack.Protected guard={isAuthenticated}>
           <Stack.Screen name="(tabs)" />
 
+          <Stack.Screen name="route-summary" />
+
+          <Stack.Screen name="active-route" />
+
           <Stack.Screen
             name="modal"
             options={{
