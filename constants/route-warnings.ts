@@ -1,4 +1,3 @@
-import { Brand } from '@/constants/brand';
 import type { IncidentCategoryId } from '@/src/types/incident';
 import type { RouteWarningLevel } from '@/src/types/route';
 
@@ -51,14 +50,14 @@ export const ROUTE_WARNING_LEVEL_STYLES: Record<
   },
   caution: {
     label: 'Caution',
-    color: '#9A6918',
+    color: '#C47A1A',
     backgroundColor: '#FFF3D6',
     icon: 'warning-outline',
   },
   concern: {
     label: 'Higher concern',
-    color: Brand.burgundy,
-    backgroundColor: Brand.blush,
+    color: '#B42318',
+    backgroundColor: '#FDECEC',
     icon: 'alert-circle-outline',
   },
 };

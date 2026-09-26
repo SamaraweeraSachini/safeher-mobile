@@ -15,6 +15,10 @@ function emitChange() {
   listeners.forEach((listener) => listener());
 }
 
+export function getSelectedRouteReview(): SelectedRouteReview | null {
+  return selectedRouteReview;
+}
+
 export function setSelectedRouteReview(
   review: SelectedRouteReview | null
 ) {

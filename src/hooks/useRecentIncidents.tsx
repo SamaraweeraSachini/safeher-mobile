@@ -17,32 +17,37 @@ export type IncidentConnectionStatus =
   | 'live'
   | 'error';
 
+let sharedIncidents: Incident[] | null = null;
+let sharedError: string | null = null;
+let sharedConnectionStatus: IncidentConnectionStatus = 'connecting';
+let sharedLastUpdatedAt: Date | null = null;
+
 /**
  * Maintains a real-time subscription to active Firestore incidents.
  */
 export function useActiveIncidents() {
   const [incidents, setIncidents] =
-    useState<Incident[]>([]);
+    useState<Incident[]>(sharedIncidents ?? []);
 
   const [isLoading, setIsLoading] =
-    useState(true);
+    useState(sharedIncidents === null);
 
   const [error, setError] =
-    useState<string | null>(null);
+    useState<string | null>(sharedError);
 
   const [
     connectionStatus,
     setConnectionStatus,
   ] =
     useState<IncidentConnectionStatus>(
-      'connecting'
+      sharedIncidents === null ? 'connecting' : sharedConnectionStatus
     );
 
   const [
     lastUpdatedAt,
     setLastUpdatedAt,
   ] =
-    useState<Date | null>(null);
+    useState<Date | null>(sharedLastUpdatedAt);
 
   const [refreshKey, setRefreshKey] =
     useState(0);
@@ -56,11 +61,11 @@ export function useActiveIncidents() {
   useEffect(() => {
     let listenerIsActive = true;
 
-    setIsLoading(true);
-    setError(null);
-    setConnectionStatus(
-      'connecting'
-    );
+    if (sharedIncidents === null) {
+      setIsLoading(true);
+      setError(null);
+      setConnectionStatus('connecting');
+    }
 
     const unsubscribe =
       subscribeToActiveIncidents(
@@ -69,20 +74,16 @@ export function useActiveIncidents() {
             return;
           }
 
-          setIncidents(
-            retrievedIncidents
-          );
+          const updatedAt = new Date();
+          sharedIncidents = retrievedIncidents;
+          sharedError = null;
+          sharedConnectionStatus = 'live';
+          sharedLastUpdatedAt = updatedAt;
 
+          setIncidents(retrievedIncidents);
           setError(null);
-
-          setConnectionStatus(
-            'live'
-          );
-
-          setLastUpdatedAt(
-            new Date()
-          );
-
+          setConnectionStatus('live');
+          setLastUpdatedAt(updatedAt);
           setIsLoading(false);
         },
 
@@ -95,14 +96,11 @@ export function useActiveIncidents() {
            * Existing markers remain visible during a temporary listener
            * failure instead of removing previously retrieved safety data.
            */
-          setError(
-            retrievalError.message
-          );
+          sharedError = retrievalError.message;
+          sharedConnectionStatus = 'error';
 
-          setConnectionStatus(
-            'error'
-          );
-
+          setError(retrievalError.message);
+          setConnectionStatus('error');
           setIsLoading(false);
         }
       );

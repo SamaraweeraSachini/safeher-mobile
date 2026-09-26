@@ -1,6 +1,5 @@
 import { type Href, useRouter } from 'expo-router';
-import { useMemo, useState } from 'react';
-import * as Location from 'expo-location';
+import { useMemo } from 'react';
 import {
   ActivityIndicator,
   Pressable,
@@ -16,7 +15,10 @@ import RouteChoiceCard from '@/src/components/route/RouteChoiceCard';
 import { useActiveIncidents } from '@/src/hooks/useRecentIncidents';
 import { placeLabel } from '@/src/services/reviewed-route-service';
 import { buildSelectableRoutes } from '@/src/services/route-options-service';
-import { setSelectedRouteReview } from '@/src/state/selected-route';
+import {
+  getSelectedRouteReview,
+  setSelectedRouteReview,
+} from '@/src/state/selected-route';
 
 import type { RouteOption } from '@/src/types/route';
 
@@ -34,435 +36,34 @@ export default function SafeRouteScreen() {
   const router = useRouter();
 
   const { incidents, isLoading, error, retry } = useActiveIncidents();
+  const routes = useMemo(() => buildSelectableRoutes(incidents), [incidents]);
 
-  const routes = useMemo(
-    () => buildSelectableRoutes(incidents),
-    [incidents],
-  );
-
-  const [openingRouteId, setOpeningRouteId] = useState<string | null>(null);
-
-  // SAFE-86 search form state
-  const [origin, setOrigin] = useState('');
-  const [destination, setDestination] = useState('');
-  const [originError, setOriginError] = useState('');
-  const [destinationError, setDestinationError] = useState('');
-  const [isSearching, setIsSearching] = useState(false);
-  const [searchMessage, setSearchMessage] = useState('');
-  const [searchError, setSearchError] = useState('');
-
-  // SAFE-87 current location state
-  const [isGettingLocation, setIsGettingLocation] = useState(false);
-  const [locationMessage, setLocationMessage] = useState('');
-  const [originCoordinates, setOriginCoordinates] =
-    useState<Location.LocationObjectCoords | null>(null);
-
-  // SAFE-88 location suggestion state
-  const [originSuggestions, setOriginSuggestions] = useState<
-    LocationSuggestion[]
-  >([]);
-  const [destinationSuggestions, setDestinationSuggestions] = useState<
-    LocationSuggestion[]
-  >([]);
-  const [isLoadingOriginSuggestions, setIsLoadingOriginSuggestions] =
-    useState(false);
-  const [
-    isLoadingDestinationSuggestions,
-    setIsLoadingDestinationSuggestions,
-  ] = useState(false);
-
-  const [selectedOrigin, setSelectedOrigin] =
-    useState<SelectedLocation | null>(null);
-  const [selectedDestination, setSelectedDestination] =
-    useState<SelectedLocation | null>(null);
-
-  const searchLocations = async (
-    query: string,
-    type: 'origin' | 'destination',
-  ) => {
-    if (query.trim().length < 3) {
-      if (type === 'origin') {
-        setOriginSuggestions([]);
-      } else {
-        setDestinationSuggestions([]);
-      }
-
-      return;
-    }
-
-    if (type === 'origin') {
-      setIsLoadingOriginSuggestions(true);
-    } else {
-      setIsLoadingDestinationSuggestions(true);
-    }
-
-    try {
-      const response = await fetch(
-        `https://nominatim.openstreetmap.org/search?format=jsonv2&addressdetails=1&limit=5&q=${encodeURIComponent(
-          query.trim(),
-        )}`,
-        {
-          headers: {
-            Accept: 'application/json',
-            'User-Agent': 'SafeHer-Mobile-App',
-          },
-        },
-      );
-
-      if (!response.ok) {
-        throw new Error('Location search failed');
-      }
-
-      const results = await response.json();
-
-      const suggestions: LocationSuggestion[] = results.map(
-        (result: {
-          place_id: number;
-          display_name: string;
-          lat: string;
-          lon: string;
-        }) => ({
-          id: String(result.place_id),
-          name: result.display_name,
-          latitude: Number(result.lat),
-          longitude: Number(result.lon),
-        }),
-      );
-
-      if (type === 'origin') {
-        setOriginSuggestions(suggestions);
-      } else {
-        setDestinationSuggestions(suggestions);
-      }
-    } catch {
-      if (type === 'origin') {
-        setOriginSuggestions([]);
-      } else {
-        setDestinationSuggestions([]);
-      }
-    } finally {
-      if (type === 'origin') {
-        setIsLoadingOriginSuggestions(false);
-      } else {
-        setIsLoadingDestinationSuggestions(false);
-      }
-    }
-  };
-
-  const handleOriginChange = (text: string) => {
-    setOrigin(text);
-    setOriginError('');
-    setSearchError('');
-    setLocationMessage('');
-    setSelectedOrigin(null);
-    setOriginCoordinates(null);
-
-    void searchLocations(text, 'origin');
-  };
-
-  const handleDestinationChange = (text: string) => {
-    setDestination(text);
-    setDestinationError('');
-    setSearchError('');
-    setSelectedDestination(null);
-
-    void searchLocations(text, 'destination');
-  };
-
-  const handleSelectOrigin = (suggestion: LocationSuggestion) => {
-    const selectedLocation: SelectedLocation = {
-      name: suggestion.name,
-      latitude: suggestion.latitude,
-      longitude: suggestion.longitude,
-    };
-
-    setOrigin(selectedLocation.name);
-    setSelectedOrigin(selectedLocation);
-
-    setOriginCoordinates({
-      latitude: selectedLocation.latitude,
-      longitude: selectedLocation.longitude,
-      altitude: null,
-      accuracy: null,
-      heading: null,
-      speed: null,
-      altitudeAccuracy: null,
-    });
-
-    setOriginSuggestions([]);
-    setOriginError('');
-    setSearchError('');
-    setLocationMessage('Origin selected.');
-  };
-
-  const handleSelectDestination = (
-    suggestion: LocationSuggestion,
-  ) => {
-    const selectedLocation: SelectedLocation = {
-      name: suggestion.name,
-      latitude: suggestion.latitude,
-      longitude: suggestion.longitude,
-    };
-
-    setDestination(selectedLocation.name);
-    setSelectedDestination(selectedLocation);
-
-    setDestinationSuggestions([]);
-    setDestinationError('');
-    setSearchError('');
-  };
-
-  const handleUseCurrentLocation = async () => {
-    setLocationMessage('');
-    setSearchError('');
-    setOriginError('');
-    setOriginSuggestions([]);
-    setIsGettingLocation(true);
-
-    try {
-      const { status } =
-        await Location.requestForegroundPermissionsAsync();
-
-      if (status !== 'granted') {
-        setLocationMessage(
-          'Location permission was denied. Please enter your origin manually.',
-        );
-        return;
-      }
-
-      const location = await Location.getCurrentPositionAsync({
-        accuracy: Location.Accuracy.Balanced,
-      });
-
-      const { latitude, longitude } = location.coords;
-
-      setOriginCoordinates(location.coords);
-
-      try {
-        const [address] = await Location.reverseGeocodeAsync({
-          latitude,
-          longitude,
-        });
-
-        if (address) {
-          const parts = [
-            address.name,
-            address.street,
-            address.city,
-            address.region,
-          ].filter(Boolean);
-
-          const locationName = parts.join(', ');
-
-          const selectedLocation: SelectedLocation = {
-            name:
-              locationName ||
-              `${latitude.toFixed(6)}, ${longitude.toFixed(6)}`,
-            latitude,
-            longitude,
-          };
-
-          setOrigin(selectedLocation.name);
-          setSelectedOrigin(selectedLocation);
-        } else {
-          const selectedLocation: SelectedLocation = {
-            name: `${latitude.toFixed(6)}, ${longitude.toFixed(6)}`,
-            latitude,
-            longitude,
-          };
-
-          setOrigin(selectedLocation.name);
-          setSelectedOrigin(selectedLocation);
-        }
-      } catch {
-        const selectedLocation: SelectedLocation = {
-          name: `${latitude.toFixed(6)}, ${longitude.toFixed(6)}`,
-          latitude,
-          longitude,
-        };
-
-        setOrigin(selectedLocation.name);
-        setSelectedOrigin(selectedLocation);
-      }
-
-      setLocationMessage('Current location set as your origin.');
-    } catch {
-      setLocationMessage(
-        'Unable to retrieve your current location. Please enter your origin manually.',
-      );
-    } finally {
-      setIsGettingLocation(false);
-    }
-  };
-
-  // SAFE-89: Validate route-search input
-  const handleSearch = () => {
-    // Prevent repeated requests while a search is already running.
-    if (isSearching) {
-      return;
-    }
-
-    setOriginError('');
-    setDestinationError('');
-    setSearchMessage('');
-    setSearchError('');
-
-    let hasError = false;
-
-    // Requirement 1:
-    // Missing origin must display an error.
-    if (!origin.trim()) {
-      setOriginError('Please enter your origin.');
-      hasError = true;
-    }
-    // Requirement 3:
-    // Typed origin must also be selected from the suggestions.
-    else if (!selectedOrigin) {
-      setOriginError(
-        'Please select your origin from the suggestions.',
-      );
-      hasError = true;
-    }
-
-    // Requirement 2:
-    // Missing destination must display an error.
-    if (!destination.trim()) {
-      setDestinationError('Please enter your destination.');
-      hasError = true;
-    }
-    // Requirement 3:
-    // Typed destination must also be selected from the suggestions.
-    else if (!selectedDestination) {
-      setDestinationError(
-        'Please select your destination from the suggestions.',
-      );
-      hasError = true;
-    }
-
-    // Requirement 4:
-    // Origin and destination cannot represent the same coordinates.
-    if (
-      selectedOrigin &&
-      selectedDestination &&
-      selectedOrigin.latitude === selectedDestination.latitude &&
-      selectedOrigin.longitude === selectedDestination.longitude
-    ) {
-      setDestinationError(
-        'Origin and destination cannot be the same location.',
-      );
-      hasError = true;
-    }
-
-    if (hasError) {
-      return;
-    }
-
-    setIsSearching(true);
-
-    /*
-     * Temporary route-search state.
-     *
-     * The actual routing service will be connected during route-engine
-     * integration. For the current Sprint 3 screen, the existing route
-     * options are used to demonstrate the loading/success/failure states.
-     */
-    setTimeout(() => {
-      setIsSearching(false);
-
-      // Requirement 6:
-      // Show a failure state when no route options are available.
-      if (routes.length === 0) {
-        setSearchError(
-          'Unable to find routes for these locations. Please try again.',
-        );
-        return;
-      }
-
-      setSearchMessage(
-        'Routes found. Available route options are shown below.',
-      );
-    }, 800);
-  };
-
-  // SAFE-89: Try Again after route-search failure
-  const handleRetrySearch = () => {
-    if (isSearching) {
-      return;
-    }
-
-    handleSearch();
-  };
-
-  const handleClear = () => {
-    setOrigin('');
-    setDestination('');
-    setOriginError('');
-    setDestinationError('');
-    setSearchMessage('');
-    setSearchError('');
-    setLocationMessage('');
-    setOriginCoordinates(null);
-
-    setSelectedOrigin(null);
-    setSelectedDestination(null);
-
-    setOriginSuggestions([]);
-    setDestinationSuggestions([]);
-  };
-
-  const handleSwap = () => {
-    const currentOrigin = origin;
-    const currentOriginLocation = selectedOrigin;
-
-    setOrigin(destination);
-    setDestination(currentOrigin);
-
-    setSelectedOrigin(selectedDestination);
-    setSelectedDestination(currentOriginLocation);
-
-    setOriginError('');
-    setDestinationError('');
-    setSearchMessage('');
-    setSearchError('');
-    setLocationMessage('');
-
-    setOriginSuggestions([]);
-    setDestinationSuggestions([]);
-
-    if (selectedDestination) {
-      setOriginCoordinates({
-        latitude: selectedDestination.latitude,
-        longitude: selectedDestination.longitude,
-        altitude: null,
-        accuracy: null,
-        heading: null,
-        speed: null,
-        altitudeAccuracy: null,
-      });
-    } else {
-      setOriginCoordinates(null);
-    }
-  };
-
-  const reviewRoute = async (route: RouteOption) => {
-    setOpeningRouteId(route.id);
-
+  const reviewRoute = (route: RouteOption) => {
     const start = route.coordinates[0];
     const end = route.coordinates[route.coordinates.length - 1];
 
-    const [originLabel, destinationLabel] = await Promise.all([
-      placeLabel(start, 'Starting point'),
-      placeLabel(end, 'Destination'),
-    ]);
-
     setSelectedRouteReview({
-      originLabel,
-      destinationLabel,
+      originLabel: 'Starting point',
+      destinationLabel: 'Destination',
       route,
     });
 
     router.push('/route-summary' as Href);
-    setOpeningRouteId(null);
+
+    void Promise.all([
+      placeLabel(start, 'Starting point'),
+      placeLabel(end, 'Destination'),
+    ]).then(([originLabel, destinationLabel]) => {
+      if (getSelectedRouteReview()?.route.id !== route.id) {
+        return;
+      }
+
+      setSelectedRouteReview({
+        originLabel,
+        destinationLabel,
+        route,
+      });
+    });
   };
 
   return (
@@ -770,9 +371,7 @@ export default function SafeRouteScreen() {
           <View key={route.id}>
             <RouteChoiceCard
               route={route}
-              onReview={
-                openingRouteId ? () => undefined : reviewRoute
-              }
+              onReview={reviewRoute}
             />
           </View>
         ))}
