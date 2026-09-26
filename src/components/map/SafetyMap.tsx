@@ -15,8 +15,12 @@ import {
   View,
 } from 'react-native';
 import MapView, {
+  Marker,
+  Polyline,
   Region,
 } from 'react-native-maps';
+
+import { Brand } from '@/constants/brand';
 
 import IncidentDetailsModal from '@/src/components/map/IncidentDetailsModal';
 import IncidentMapMarker from '@/src/components/map/IncidentMapMarker';
@@ -28,9 +32,17 @@ import type {
 
 import { useCurrentLocation } from '@/src/hooks/useCurrentLocation';
 import { useLocationPermission } from '@/src/hooks/useLocationPermission';
+import { useMapRoutes } from '@/src/hooks/useMapRoutes';
 import { useActiveIncidents } from '@/src/hooks/useRecentIncidents';
 
+import {
+  getSafetyLevel,
+} from '@/src/services/safety-score-service';
+
 import type { Incident } from '@/src/types/incident';
+import type {
+  RouteCoordinate,
+} from '@/src/types/route';
 
 import LocationPermissionMessage from './LocationPermissionMessage';
 
@@ -44,7 +56,15 @@ const DEFAULT_REGION: Region = {
 const USER_REGION_DELTA = 0.015;
 const MINIMUM_LOADING_TIME = 700;
 
-export default function SafetyMap() {
+type Props = {
+  origin?: RouteCoordinate | null;
+  destination?: RouteCoordinate | null;
+};
+
+export default function SafetyMap({
+  origin,
+  destination,
+}: Props) {
   const mapRef =
     useRef<MapView | null>(null);
 
@@ -85,6 +105,19 @@ export default function SafetyMap() {
     error: incidentsError,
     retry: retryIncidents,
   } = useActiveIncidents();
+
+  const {
+    routes,
+    selectedRoute,
+    selectedRouteId,
+    selectRoute,
+    isLoading: routesLoading,
+    error: routesError,
+  } = useMapRoutes({
+    origin,
+    destination,
+    incidents,
+  });
 
   const filteredIncidents =
     useMemo(() => {
@@ -154,7 +187,8 @@ export default function SafetyMap() {
   useEffect(() => {
     if (
       !isMapReady ||
-      !location
+      !location ||
+      (origin && destination)
     ) {
       return;
     }
@@ -163,7 +197,47 @@ export default function SafetyMap() {
   }, [
     isMapReady,
     location,
+    origin,
+    destination,
     centreOnCurrentLocation,
+  ]);
+
+  useEffect(() => {
+    if (
+      !isMapReady ||
+      !origin ||
+      !destination ||
+      routes.length === 0
+    ) {
+      return;
+    }
+
+    const routeCoordinates =
+      routes.flatMap(
+        route => route.coordinates
+      );
+
+    mapRef.current?.fitToCoordinates(
+      [
+        origin,
+        ...routeCoordinates,
+        destination,
+      ],
+      {
+        edgePadding: {
+          top: 120,
+          right: 50,
+          bottom: 230,
+          left: 50,
+        },
+        animated: true,
+      }
+    );
+  }, [
+    isMapReady,
+    origin,
+    destination,
+    routes,
   ]);
 
   const handleMyLocationPress =
@@ -236,6 +310,20 @@ export default function SafetyMap() {
           )
           .join(' ');
 
+  const selectedSafetyLevel =
+    selectedRoute
+      ? getSafetyLevel(
+          selectedRoute.safetyScore
+        )
+          .split('-')
+          .map(
+            word =>
+              word.charAt(0).toUpperCase() +
+              word.slice(1)
+          )
+          .join(' ')
+      : '';
+
   return (
     <View style={styles.container}>
       <MapView
@@ -264,6 +352,68 @@ export default function SafetyMap() {
             />
           )
         )}
+
+        {origin ? (
+          <Marker
+            coordinate={origin}
+            title="Origin"
+            description="Route starting point"
+            pinColor={Brand.rose}
+          />
+        ) : null}
+
+        {destination ? (
+          <Marker
+            coordinate={destination}
+            title="Destination"
+            description="Route destination"
+            pinColor={Brand.burgundyDeep}
+          />
+        ) : null}
+
+        {routes
+          .filter(
+            route =>
+              route.id !==
+              selectedRouteId
+          )
+          .map(route => (
+            <Polyline
+              key={route.id}
+              coordinates={
+                route.coordinates
+              }
+              strokeColor={
+                Brand.roseSoft
+              }
+              strokeWidth={4}
+              tappable
+              onPress={() =>
+                selectRoute(
+                  route.id
+                )
+              }
+            />
+          ))}
+
+        {selectedRoute ? (
+          <Polyline
+            key={`selected-${selectedRoute.id}`}
+            coordinates={
+              selectedRoute.coordinates
+            }
+            strokeColor={
+              Brand.burgundy
+            }
+            strokeWidth={7}
+            tappable
+            onPress={() =>
+              selectRoute(
+                selectedRoute.id
+              )
+            }
+          />
+        ) : null}
       </MapView>
 
       {!isMapLoading ? (
@@ -287,6 +437,36 @@ export default function SafetyMap() {
 
           <Text style={styles.loadingText}>
             Loading Safety Map...
+          </Text>
+        </View>
+      ) : null}
+
+      {!isMapLoading &&
+      routesLoading ? (
+        <View style={styles.routeStatusCard}>
+          <ActivityIndicator
+            size="small"
+            color={Brand.burgundy}
+          />
+
+          <Text style={styles.routeStatusText}>
+            Finding available routes...
+          </Text>
+        </View>
+      ) : null}
+
+      {!isMapLoading &&
+      !routesLoading &&
+      routesError ? (
+        <View style={styles.routeErrorCard}>
+          <Ionicons
+            name="warning-outline"
+            size={20}
+            color="#B42318"
+          />
+
+          <Text style={styles.routeErrorText}>
+            {routesError}
           </Text>
         </View>
       ) : null}
@@ -460,6 +640,8 @@ export default function SafetyMap() {
         <Pressable
           style={({ pressed }) => [
             styles.myLocationButton,
+            routes.length > 0 &&
+              styles.myLocationButtonWithRoutes,
             pressed &&
               styles.myLocationButtonPressed,
             isMyLocationLoading &&
@@ -488,7 +670,8 @@ export default function SafetyMap() {
 
       {!isMapLoading &&
       location &&
-      !isLocationLoading ? (
+      !isLocationLoading &&
+      routes.length === 0 ? (
         <View
           style={styles.locationReadyCard}
           pointerEvents="none"
@@ -510,6 +693,129 @@ export default function SafetyMap() {
               Current position found
             </Text>
           </View>
+        </View>
+      ) : null}
+
+      {!isMapLoading &&
+      !routesLoading &&
+      !routesError &&
+      routes.length > 0 &&
+      selectedRoute ? (
+        <View style={styles.routePanel}>
+          <View style={styles.routeSelector}>
+            {routes.map(
+              (route, index) => {
+                const selected =
+                  route.id ===
+                  selectedRouteId;
+
+                return (
+                  <Pressable
+                    key={route.id}
+                    style={[
+                      styles.routeChoice,
+                      selected &&
+                        styles.routeChoiceSelected,
+                    ]}
+                    onPress={() =>
+                      selectRoute(
+                        route.id
+                      )
+                    }
+                    accessibilityRole="button"
+                    accessibilityLabel={
+                      selected
+                        ? `Route ${index + 1} selected`
+                        : `Select route ${index + 1}`
+                    }
+                  >
+                    <Text
+                      style={[
+                        styles.routeChoiceText,
+                        selected &&
+                          styles.routeChoiceTextSelected,
+                      ]}
+                    >
+                      Route {index + 1}
+                    </Text>
+                  </Pressable>
+                );
+              }
+            )}
+          </View>
+
+          <View style={styles.routeHeadingRow}>
+            <View>
+              <Text style={styles.routeTitle}>
+                {selectedRoute.label}
+              </Text>
+
+              <Text style={styles.routeSubtitle}>
+                Selected route
+              </Text>
+            </View>
+
+            <View style={styles.safetyScoreBox}>
+              <Text style={styles.safetyScoreValue}>
+                {selectedRoute.safetyScore}
+              </Text>
+
+              <Text style={styles.safetyScoreLabel}>
+                Safety
+              </Text>
+            </View>
+          </View>
+
+          <View style={styles.routeDetails}>
+            <View style={styles.routeDetailItem}>
+              <Ionicons
+                name="navigate-outline"
+                size={17}
+                color={Brand.burgundy}
+              />
+
+              <Text style={styles.routeDetailValue}>
+                {(
+                  selectedRoute.distanceMeters /
+                  1000
+                ).toFixed(1)}{' '}
+                km
+              </Text>
+            </View>
+
+            <View style={styles.routeDetailItem}>
+              <Ionicons
+                name="time-outline"
+                size={17}
+                color={Brand.burgundy}
+              />
+
+              <Text style={styles.routeDetailValue}>
+                {Math.round(
+                  selectedRoute.durationSeconds /
+                    60
+                )}{' '}
+                min
+              </Text>
+            </View>
+
+            <View style={styles.routeDetailItem}>
+              <Ionicons
+                name="warning-outline"
+                size={17}
+                color={Brand.burgundy}
+              />
+
+              <Text style={styles.routeDetailValue}>
+                {selectedRoute.nearbyIncidentCount}{' '}
+                nearby
+              </Text>
+            </View>
+          </View>
+
+          <Text style={styles.routeSafetyText}>
+            {selectedSafetyLevel}
+          </Text>
         </View>
       ) : null}
 
@@ -741,6 +1047,10 @@ const styles = StyleSheet.create({
     backgroundColor: '#FFFFFF',
   },
 
+  myLocationButtonWithRoutes: {
+    bottom: 235,
+  },
+
   myLocationButtonPressed: {
     backgroundColor: '#FFF1F6',
     transform: [
@@ -792,5 +1102,165 @@ const styles = StyleSheet.create({
     color: '#667085',
     fontSize: 12,
     fontWeight: '500',
+  },
+
+  routeStatusCard: {
+    position: 'absolute',
+    bottom: 24,
+    left: 18,
+    right: 18,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 9,
+    zIndex: 24,
+    elevation: 24,
+    paddingVertical: 14,
+    paddingHorizontal: 16,
+    borderWidth: 1,
+    borderColor: Brand.line,
+    borderRadius: 18,
+    backgroundColor: Brand.white,
+  },
+
+  routeStatusText: {
+    color: Brand.muted,
+    fontSize: 13,
+    fontWeight: '600',
+  },
+
+  routeErrorCard: {
+    position: 'absolute',
+    bottom: 24,
+    left: 18,
+    right: 18,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 9,
+    zIndex: 24,
+    elevation: 24,
+    padding: 14,
+    borderWidth: 1,
+    borderColor: '#FDA29B',
+    borderRadius: 18,
+    backgroundColor: '#FEF3F2',
+  },
+
+  routeErrorText: {
+    flex: 1,
+    color: '#B42318',
+    fontSize: 12,
+    lineHeight: 18,
+  },
+
+  routePanel: {
+    position: 'absolute',
+    left: 16,
+    right: 16,
+    bottom: 18,
+    zIndex: 24,
+    elevation: 24,
+    padding: 14,
+    borderWidth: 1,
+    borderColor: Brand.line,
+    borderRadius: 20,
+    backgroundColor: Brand.white,
+  },
+
+  routeSelector: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 8,
+    marginBottom: 12,
+  },
+
+  routeChoice: {
+    minHeight: 34,
+    justifyContent: 'center',
+    paddingHorizontal: 13,
+    borderWidth: 1,
+    borderColor: Brand.line,
+    borderRadius: 17,
+    backgroundColor: Brand.blush,
+  },
+
+  routeChoiceSelected: {
+    borderColor: Brand.burgundy,
+    backgroundColor: Brand.burgundy,
+  },
+
+  routeChoiceText: {
+    color: Brand.burgundy,
+    fontSize: 12,
+    fontWeight: '700',
+  },
+
+  routeChoiceTextSelected: {
+    color: Brand.white,
+  },
+
+  routeHeadingRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+  },
+
+  routeTitle: {
+    color: Brand.ink,
+    fontSize: 17,
+    fontWeight: '800',
+  },
+
+  routeSubtitle: {
+    marginTop: 2,
+    color: Brand.muted,
+    fontSize: 11,
+    fontWeight: '500',
+  },
+
+  safetyScoreBox: {
+    minWidth: 54,
+    alignItems: 'center',
+    paddingVertical: 6,
+    paddingHorizontal: 10,
+    borderRadius: 12,
+    backgroundColor: Brand.blush,
+  },
+
+  safetyScoreValue: {
+    color: Brand.burgundy,
+    fontSize: 18,
+    fontWeight: '900',
+  },
+
+  safetyScoreLabel: {
+    color: Brand.muted,
+    fontSize: 9,
+    fontWeight: '700',
+  },
+
+  routeDetails: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    marginTop: 13,
+  },
+
+  routeDetailItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 5,
+  },
+
+  routeDetailValue: {
+    color: Brand.ink,
+    fontSize: 12,
+    fontWeight: '700',
+  },
+
+  routeSafetyText: {
+    marginTop: 10,
+    color: Brand.muted,
+    fontSize: 11,
+    fontWeight: '600',
   },
 });
