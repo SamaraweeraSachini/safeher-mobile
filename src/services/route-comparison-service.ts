@@ -1,4 +1,4 @@
-import { ROUTE_COMPARISON_WEIGHTS } from '@/constants/route-comparison';
+  import { ROUTE_COMPARISON_WEIGHTS } from '@/constants/route-comparison';
 
 export interface RouteChoiceInput {
   id: string;
