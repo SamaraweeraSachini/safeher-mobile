@@ -1,35 +1,52 @@
-  import { ROUTE_COMPARISON_WEIGHTS } from '@/constants/route-comparison';
+import { ROUTE_COMPARISON_WEIGHTS } from '@/constants/route-comparison';
 
-export interface RouteChoiceInput {
-  id: string;
-  durationMinutes: number;
-  safetyScore: number;
-}
+import type {
+  RouteOption,
+  RouteType,
+} from '@/src/types/route';
 
-export type RouteRole = 'Fastest' | 'Safest' | 'Balanced';
+export type RouteRole =
+  | 'Fastest'
+  | 'Safest'
+  | 'Balanced';
 
-export type ComparedRoute<T extends RouteChoiceInput> = T & {
+export type ComparedRoute = RouteOption & {
   roles: RouteRole[];
   label: string;
   balancedValue: number;
 };
 
+function getBalancedValue(
+  route: RouteOption,
+  shortestDurationSeconds: number
+): number {
+  return (
+    ROUTE_COMPARISON_WEIGHTS.safety *
+      (route.safetyScore / 100) +
+    ROUTE_COMPARISON_WEIGHTS.duration *
+      (shortestDurationSeconds /
+        route.durationSeconds)
+  );
+}
+
 /**
- * Identifies route choices from already calculated route durations and
- * incident-based safety scores.
+ * Compares RouteOption objects and identifies the fastest,
+ * safest and balanced choices.
  *
- * Fastest: lowest duration; ties prefer higher safety score, then ID.
- * Safest: highest safety score; ties prefer shorter duration, then ID.
- * Balanced: highest (0.6 × score/100 +
- *                    0.4 × shortest duration/route duration).
- *           Ties prefer higher safety, shorter duration, then ID.
+ * Fastest:
+ * Lowest travel duration.
  *
- * A route can win multiple roles. Its label combines those roles.
- * Routes winning no role receive unique Alternative labels.
+ * Safest:
+ * Highest incident-based safety score.
+ *
+ * Balanced:
+ * 60% safety score and 40% relative travel time.
+ *
+ * Every routing feature therefore uses the shared RouteOption model.
  */
-export function identifyRouteChoices<T extends RouteChoiceInput>(
-  routes: readonly T[]
-): ComparedRoute<T>[] {
+export function identifyRouteChoices(
+  routes: readonly RouteOption[]
+): ComparedRoute[] {
   if (routes.length === 0) {
     return [];
   }
@@ -40,14 +57,19 @@ export function identifyRouteChoices<T extends RouteChoiceInput>(
     if (
       !route.id.trim() ||
       ids.has(route.id) ||
-      !Number.isFinite(route.durationMinutes) ||
-      route.durationMinutes <= 0 ||
+      route.coordinates.length === 0 ||
+      !Number.isFinite(route.distanceMeters) ||
+      route.distanceMeters < 0 ||
+      !Number.isFinite(route.durationSeconds) ||
+      route.durationSeconds <= 0 ||
       !Number.isFinite(route.safetyScore) ||
       route.safetyScore < 0 ||
-      route.safetyScore > 100
+      route.safetyScore > 100 ||
+      !Number.isFinite(route.nearbyIncidentCount) ||
+      route.nearbyIncidentCount < 0
     ) {
       throw new Error(
-        'Routes need unique IDs, positive durations and safety scores from 0 to 100.'
+        'Routes must contain valid RouteOption data.'
       );
     }
 
@@ -56,7 +78,7 @@ export function identifyRouteChoices<T extends RouteChoiceInput>(
 
   const fastest = [...routes].sort(
     (a, b) =>
-      a.durationMinutes - b.durationMinutes ||
+      a.durationSeconds - b.durationSeconds ||
       b.safetyScore - a.safetyScore ||
       a.id.localeCompare(b.id)
   )[0];
@@ -64,23 +86,25 @@ export function identifyRouteChoices<T extends RouteChoiceInput>(
   const safest = [...routes].sort(
     (a, b) =>
       b.safetyScore - a.safetyScore ||
-      a.durationMinutes - b.durationMinutes ||
+      a.durationSeconds - b.durationSeconds ||
       a.id.localeCompare(b.id)
   )[0];
 
-  const shortestDuration = fastest.durationMinutes;
-
-  const balancedValue = (route: T): number =>
-    ROUTE_COMPARISON_WEIGHTS.safety *
-      (route.safetyScore / 100) +
-    ROUTE_COMPARISON_WEIGHTS.duration *
-      (shortestDuration / route.durationMinutes);
+  const shortestDurationSeconds =
+    fastest.durationSeconds;
 
   const balanced = [...routes].sort(
     (a, b) =>
-      balancedValue(b) - balancedValue(a) ||
+      getBalancedValue(
+        b,
+        shortestDurationSeconds
+      ) -
+        getBalancedValue(
+          a,
+          shortestDurationSeconds
+        ) ||
       b.safetyScore - a.safetyScore ||
-      a.durationMinutes - b.durationMinutes ||
+      a.durationSeconds - b.durationSeconds ||
       a.id.localeCompare(b.id)
   )[0];
 
@@ -105,14 +129,32 @@ export function identifyRouteChoices<T extends RouteChoiceInput>(
       alternativeNumber += 1;
     }
 
+    let type: RouteType = route.type;
+
+    if (route.id === fastest.id) {
+      type = 'fastest';
+    }
+
+    if (route.id === safest.id) {
+      type = 'safest';
+    }
+
+    if (route.id === balanced.id) {
+      type = 'balanced';
+    }
+
     return {
       ...route,
+      type,
       roles,
       label:
         roles.length > 0
           ? roles.join(' & ')
           : `Alternative ${alternativeNumber}`,
-      balancedValue: balancedValue(route),
+      balancedValue: getBalancedValue(
+        route,
+        shortestDurationSeconds
+      ),
     };
   });
 }

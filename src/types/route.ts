@@ -1,12 +1,27 @@
 import type { IncidentCategoryId } from '@/src/types/incident';
 
-export type RouteType = 'fastest' | 'safest' | 'balanced';
+/**
+ * The route categories supported by SafeHer.
+ */
+export type RouteType =
+  | 'fastest'
+  | 'safest'
+  | 'balanced';
 
+/**
+ * A geographical point belonging to a route.
+ */
 export interface RouteCoordinate {
   latitude: number;
   longitude: number;
 }
 
+/**
+ * Common route model used throughout the Safe Route feature.
+ *
+ * Routing services provide the coordinates, distance and duration.
+ * SafeHer then adds the safety score and nearby incident count.
+ */
 export interface RouteOption {
   id: string;
   type: RouteType;
@@ -17,7 +32,10 @@ export interface RouteOption {
   nearbyIncidentCount: number;
 }
 
-export type RouteWarningLevel = 'info' | 'caution' | 'concern';
+export type RouteWarningLevel =
+  | 'info'
+  | 'caution'
+  | 'concern';
 
 export interface RouteWarning {
   id: string;
