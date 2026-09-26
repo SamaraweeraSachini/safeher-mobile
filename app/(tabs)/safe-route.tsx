@@ -20,6 +20,16 @@ import { setSelectedRouteReview } from '@/src/state/selected-route';
 
 import type { RouteOption } from '@/src/types/route';
 
+type SelectedLocation = {
+  name: string;
+  latitude: number;
+  longitude: number;
+};
+
+type LocationSuggestion = SelectedLocation & {
+  id: string;
+};
+
 export default function SafeRouteScreen() {
   const router = useRouter();
 
@@ -46,9 +56,161 @@ export default function SafeRouteScreen() {
   const [originCoordinates, setOriginCoordinates] =
     useState<Location.LocationObjectCoords | null>(null);
 
+  // SAFE-88 location suggestion state
+  const [originSuggestions, setOriginSuggestions] = useState<
+    LocationSuggestion[]
+  >([]);
+  const [destinationSuggestions, setDestinationSuggestions] = useState<
+    LocationSuggestion[]
+  >([]);
+  const [isLoadingOriginSuggestions, setIsLoadingOriginSuggestions] =
+    useState(false);
+  const [
+    isLoadingDestinationSuggestions,
+    setIsLoadingDestinationSuggestions,
+  ] = useState(false);
+
+  const [selectedOrigin, setSelectedOrigin] =
+    useState<SelectedLocation | null>(null);
+  const [selectedDestination, setSelectedDestination] =
+    useState<SelectedLocation | null>(null);
+
+  const searchLocations = async (
+    query: string,
+    type: 'origin' | 'destination',
+  ) => {
+    if (query.trim().length < 3) {
+      if (type === 'origin') {
+        setOriginSuggestions([]);
+      } else {
+        setDestinationSuggestions([]);
+      }
+
+      return;
+    }
+
+    if (type === 'origin') {
+      setIsLoadingOriginSuggestions(true);
+    } else {
+      setIsLoadingDestinationSuggestions(true);
+    }
+
+    try {
+      const response = await fetch(
+        `https://nominatim.openstreetmap.org/search?format=jsonv2&addressdetails=1&limit=5&q=${encodeURIComponent(
+          query.trim(),
+        )}`,
+        {
+          headers: {
+            Accept: 'application/json',
+            'User-Agent': 'SafeHer-Mobile-App',
+          },
+        },
+      );
+
+      if (!response.ok) {
+        throw new Error('Location search failed');
+      }
+
+      const results = await response.json();
+
+      const suggestions: LocationSuggestion[] = results.map(
+        (result: {
+          place_id: number;
+          display_name: string;
+          lat: string;
+          lon: string;
+        }) => ({
+          id: String(result.place_id),
+          name: result.display_name,
+          latitude: Number(result.lat),
+          longitude: Number(result.lon),
+        }),
+      );
+
+      if (type === 'origin') {
+        setOriginSuggestions(suggestions);
+      } else {
+        setDestinationSuggestions(suggestions);
+      }
+    } catch {
+      if (type === 'origin') {
+        setOriginSuggestions([]);
+      } else {
+        setDestinationSuggestions([]);
+      }
+    } finally {
+      if (type === 'origin') {
+        setIsLoadingOriginSuggestions(false);
+      } else {
+        setIsLoadingDestinationSuggestions(false);
+      }
+    }
+  };
+
+  const handleOriginChange = (text: string) => {
+    setOrigin(text);
+    setOriginError('');
+    setLocationMessage('');
+    setSelectedOrigin(null);
+    setOriginCoordinates(null);
+
+    void searchLocations(text, 'origin');
+  };
+
+  const handleDestinationChange = (text: string) => {
+    setDestination(text);
+    setDestinationError('');
+    setSelectedDestination(null);
+
+    void searchLocations(text, 'destination');
+  };
+
+  const handleSelectOrigin = (suggestion: LocationSuggestion) => {
+    const selectedLocation: SelectedLocation = {
+      name: suggestion.name,
+      latitude: suggestion.latitude,
+      longitude: suggestion.longitude,
+    };
+
+    setOrigin(selectedLocation.name);
+    setSelectedOrigin(selectedLocation);
+
+    setOriginCoordinates({
+      latitude: selectedLocation.latitude,
+      longitude: selectedLocation.longitude,
+      altitude: null,
+      accuracy: null,
+      heading: null,
+      speed: null,
+      altitudeAccuracy: null,
+    });
+
+    setOriginSuggestions([]);
+    setOriginError('');
+    setLocationMessage('Origin selected.');
+  };
+
+  const handleSelectDestination = (
+    suggestion: LocationSuggestion,
+  ) => {
+    const selectedLocation: SelectedLocation = {
+      name: suggestion.name,
+      latitude: suggestion.latitude,
+      longitude: suggestion.longitude,
+    };
+
+    setDestination(selectedLocation.name);
+    setSelectedDestination(selectedLocation);
+
+    setDestinationSuggestions([]);
+    setDestinationError('');
+  };
+
   const handleUseCurrentLocation = async () => {
     setLocationMessage('');
     setOriginError('');
+    setOriginSuggestions([]);
     setIsGettingLocation(true);
 
     try {
@@ -86,15 +248,35 @@ export default function SafeRouteScreen() {
 
           const locationName = parts.join(', ');
 
-          setOrigin(
-            locationName ||
+          const selectedLocation: SelectedLocation = {
+            name:
+              locationName ||
               `${latitude.toFixed(6)}, ${longitude.toFixed(6)}`,
-          );
+            latitude,
+            longitude,
+          };
+
+          setOrigin(selectedLocation.name);
+          setSelectedOrigin(selectedLocation);
         } else {
-          setOrigin(`${latitude.toFixed(6)}, ${longitude.toFixed(6)}`);
+          const selectedLocation: SelectedLocation = {
+            name: `${latitude.toFixed(6)}, ${longitude.toFixed(6)}`,
+            latitude,
+            longitude,
+          };
+
+          setOrigin(selectedLocation.name);
+          setSelectedOrigin(selectedLocation);
         }
       } catch {
-        setOrigin(`${latitude.toFixed(6)}, ${longitude.toFixed(6)}`);
+        const selectedLocation: SelectedLocation = {
+          name: `${latitude.toFixed(6)}, ${longitude.toFixed(6)}`,
+          latitude,
+          longitude,
+        };
+
+        setOrigin(selectedLocation.name);
+        setSelectedOrigin(selectedLocation);
       }
 
       setLocationMessage('Current location set as your origin.');
@@ -130,8 +312,6 @@ export default function SafeRouteScreen() {
 
     setIsSearching(true);
 
-    // SAFE-86 UI loading state.
-    // The existing route engine will provide the actual route results.
     setTimeout(() => {
       setIsSearching(false);
       setSearchMessage(
@@ -148,19 +328,45 @@ export default function SafeRouteScreen() {
     setSearchMessage('');
     setLocationMessage('');
     setOriginCoordinates(null);
+
+    setSelectedOrigin(null);
+    setSelectedDestination(null);
+
+    setOriginSuggestions([]);
+    setDestinationSuggestions([]);
   };
 
   const handleSwap = () => {
     const currentOrigin = origin;
+    const currentOriginLocation = selectedOrigin;
 
     setOrigin(destination);
     setDestination(currentOrigin);
+
+    setSelectedOrigin(selectedDestination);
+    setSelectedDestination(currentOriginLocation);
 
     setOriginError('');
     setDestinationError('');
     setSearchMessage('');
     setLocationMessage('');
-    setOriginCoordinates(null);
+
+    setOriginSuggestions([]);
+    setDestinationSuggestions([]);
+
+    if (selectedDestination) {
+      setOriginCoordinates({
+        latitude: selectedDestination.latitude,
+        longitude: selectedDestination.longitude,
+        altitude: null,
+        accuracy: null,
+        heading: null,
+        speed: null,
+        altitudeAccuracy: null,
+      });
+    } else {
+      setOriginCoordinates(null);
+    }
   };
 
   const reviewRoute = async (route: RouteOption) => {
@@ -197,7 +403,6 @@ export default function SafeRouteScreen() {
           Enter your origin and destination to search for suitable routes.
         </Text>
 
-        {/* SAFE-86: Route Search Form */}
         <View style={styles.searchCard}>
           <Text style={styles.inputLabel}>Origin</Text>
 
@@ -212,21 +417,7 @@ export default function SafeRouteScreen() {
             <TextInput
               style={styles.input}
               value={origin}
-              onChangeText={(text) => {
-                setOrigin(text);
-
-                if (originError) {
-                  setOriginError('');
-                }
-
-                if (locationMessage) {
-                  setLocationMessage('');
-                }
-
-                if (originCoordinates) {
-                  setOriginCoordinates(null);
-                }
-              }}
+              onChangeText={handleOriginChange}
               placeholder="Enter starting location"
               placeholderTextColor="#9A8790"
               accessibilityLabel="Origin"
@@ -237,7 +428,42 @@ export default function SafeRouteScreen() {
             <Text style={styles.errorText}>{originError}</Text>
           ) : null}
 
-          {/* SAFE-87: Use Current Location */}
+          {isLoadingOriginSuggestions ? (
+            <View style={styles.suggestionState}>
+              <ActivityIndicator size="small" color="#C43D74" />
+
+              <Text style={styles.suggestionStateText}>
+                Searching locations...
+              </Text>
+            </View>
+          ) : null}
+
+          {originSuggestions.length > 0 ? (
+            <View style={styles.suggestionsContainer}>
+              {originSuggestions.map((suggestion) => (
+                <Pressable
+                  key={suggestion.id}
+                  style={({ pressed }) => [
+                    styles.suggestionItem,
+                    pressed && styles.pressed,
+                  ]}
+                  onPress={() => handleSelectOrigin(suggestion)}
+                  accessibilityRole="button"
+                  accessibilityLabel={`Select ${suggestion.name}`}
+                >
+                  <Text style={styles.suggestionIcon}>⌖</Text>
+
+                  <Text
+                    style={styles.suggestionText}
+                    numberOfLines={2}
+                  >
+                    {suggestion.name}
+                  </Text>
+                </Pressable>
+              ))}
+            </View>
+          ) : null}
+
           <Pressable
             style={({ pressed }) => [
               styles.locationButton,
@@ -252,6 +478,7 @@ export default function SafeRouteScreen() {
             {isGettingLocation ? (
               <>
                 <ActivityIndicator size="small" color="#C43D74" />
+
                 <Text style={styles.locationButtonText}>
                   Getting Current Location...
                 </Text>
@@ -259,6 +486,7 @@ export default function SafeRouteScreen() {
             ) : (
               <>
                 <Text style={styles.locationIcon}>⌖</Text>
+
                 <Text style={styles.locationButtonText}>
                   Use Current Location
                 </Text>
@@ -272,7 +500,6 @@ export default function SafeRouteScreen() {
             </Text>
           ) : null}
 
-          {/* Swap button */}
           <View style={styles.swapRow}>
             <View style={styles.swapLine} />
 
@@ -304,13 +531,7 @@ export default function SafeRouteScreen() {
             <TextInput
               style={styles.input}
               value={destination}
-              onChangeText={(text) => {
-                setDestination(text);
-
-                if (destinationError) {
-                  setDestinationError('');
-                }
-              }}
+              onChangeText={handleDestinationChange}
               placeholder="Enter destination"
               placeholderTextColor="#9A8790"
               accessibilityLabel="Destination"
@@ -318,10 +539,49 @@ export default function SafeRouteScreen() {
           </View>
 
           {destinationError ? (
-            <Text style={styles.errorText}>{destinationError}</Text>
+            <Text style={styles.errorText}>
+              {destinationError}
+            </Text>
           ) : null}
 
-          {/* Search */}
+          {isLoadingDestinationSuggestions ? (
+            <View style={styles.suggestionState}>
+              <ActivityIndicator size="small" color="#C43D74" />
+
+              <Text style={styles.suggestionStateText}>
+                Searching locations...
+              </Text>
+            </View>
+          ) : null}
+
+          {destinationSuggestions.length > 0 ? (
+            <View style={styles.suggestionsContainer}>
+              {destinationSuggestions.map((suggestion) => (
+                <Pressable
+                  key={suggestion.id}
+                  style={({ pressed }) => [
+                    styles.suggestionItem,
+                    pressed && styles.pressed,
+                  ]}
+                  onPress={() =>
+                    handleSelectDestination(suggestion)
+                  }
+                  accessibilityRole="button"
+                  accessibilityLabel={`Select ${suggestion.name}`}
+                >
+                  <Text style={styles.suggestionIcon}>⌖</Text>
+
+                  <Text
+                    style={styles.suggestionText}
+                    numberOfLines={2}
+                  >
+                    {suggestion.name}
+                  </Text>
+                </Pressable>
+              ))}
+            </View>
+          ) : null}
+
           <Pressable
             style={({ pressed }) => [
               styles.searchButton,
@@ -336,6 +596,7 @@ export default function SafeRouteScreen() {
             {isSearching ? (
               <>
                 <ActivityIndicator size="small" color="#FFFFFF" />
+
                 <Text style={styles.searchButtonText}>
                   Searching...
                 </Text>
@@ -347,7 +608,6 @@ export default function SafeRouteScreen() {
             )}
           </Pressable>
 
-          {/* Clear */}
           <Pressable
             style={({ pressed }) => [
               styles.clearButton,
@@ -367,11 +627,12 @@ export default function SafeRouteScreen() {
           ) : null}
 
           {searchMessage ? (
-            <Text style={styles.messageText}>{searchMessage}</Text>
+            <Text style={styles.messageText}>
+              {searchMessage}
+            </Text>
           ) : null}
         </View>
 
-        {/* Existing Sprint 3 route results */}
         {isLoading && routes.length === 0 && (
           <View style={styles.stateCard}>
             <ActivityIndicator color="#C43D74" />
@@ -494,6 +755,53 @@ const styles = StyleSheet.create({
   errorText: {
     marginTop: 6,
     color: '#C43D74',
+    fontSize: 13,
+  },
+
+  suggestionsContainer: {
+    marginTop: 8,
+    overflow: 'hidden',
+    borderWidth: 1,
+    borderColor: '#E8DFE4',
+    borderRadius: 12,
+    backgroundColor: '#FFFFFF',
+  },
+
+  suggestionItem: {
+    minHeight: 54,
+    paddingHorizontal: 12,
+    flexDirection: 'row',
+    alignItems: 'center',
+    borderBottomWidth: 1,
+    borderBottomColor: '#F0E9ED',
+  },
+
+  suggestionIcon: {
+    width: 28,
+    color: '#C43D74',
+    fontSize: 20,
+    textAlign: 'center',
+  },
+
+  suggestionText: {
+    flex: 1,
+    marginLeft: 8,
+    color: '#4D3B43',
+    fontSize: 14,
+    lineHeight: 19,
+  },
+
+  suggestionState: {
+    minHeight: 42,
+    marginTop: 8,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+  },
+
+  suggestionStateText: {
+    color: '#75656C',
     fontSize: 13,
   },
 
