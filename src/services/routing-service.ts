@@ -1,6 +1,4 @@
-import type {
-  RouteCoordinate,
-} from '@/src/types/route';
+import type { RouteCoordinate } from '@/src/types/route';
 
 const GEOAPIFY_ROUTING_URL =
   'https://api.geoapify.com/v1/routing';
@@ -14,9 +12,34 @@ export type RoutingMode =
   | 'drive';
 
 export interface RoutingResult {
+  id: string;
   coordinates: RouteCoordinate[];
   distanceMeters: number;
   durationSeconds: number;
+}
+
+export type RoutingErrorCode =
+  | 'invalid-origin'
+  | 'invalid-destination'
+  | 'missing-api-key'
+  | 'network-error'
+  | 'rate-limit'
+  | 'no-route'
+  | 'invalid-response'
+  | 'service-error';
+
+export class RoutingServiceError extends Error {
+  code: RoutingErrorCode;
+
+  constructor(
+    code: RoutingErrorCode,
+    message: string
+  ) {
+    super(message);
+
+    this.name = 'RoutingServiceError';
+    this.code = code;
+  }
 }
 
 interface GeoapifyRouteProperties {
@@ -24,38 +47,48 @@ interface GeoapifyRouteProperties {
   time?: number;
 }
 
+interface GeoapifyRouteGeometry {
+  type?: string;
+  coordinates?: unknown;
+}
+
 interface GeoapifyRouteFeature {
   properties?: GeoapifyRouteProperties;
-  geometry?: {
-    type?: string;
-    coordinates?: unknown;
-  };
+  geometry?: GeoapifyRouteGeometry;
 }
 
 interface GeoapifyRoutingResponse {
   features?: GeoapifyRouteFeature[];
 }
 
-export class RoutingServiceError extends Error {
-  constructor(message: string) {
-    super(message);
-    this.name = 'RoutingServiceError';
-  }
+function isValidCoordinate(
+  coordinate: RouteCoordinate
+): boolean {
+  return (
+    Number.isFinite(coordinate.latitude) &&
+    Number.isFinite(coordinate.longitude) &&
+    coordinate.latitude >= -90 &&
+    coordinate.latitude <= 90 &&
+    coordinate.longitude >= -180 &&
+    coordinate.longitude <= 180
+  );
 }
 
-function validateCoordinate(
-  coordinate: RouteCoordinate
+function validateCoordinates(
+  origin: RouteCoordinate,
+  destination: RouteCoordinate
 ): void {
-  if (
-    !Number.isFinite(coordinate.latitude) ||
-    !Number.isFinite(coordinate.longitude) ||
-    coordinate.latitude < -90 ||
-    coordinate.latitude > 90 ||
-    coordinate.longitude < -180 ||
-    coordinate.longitude > 180
-  ) {
+  if (!isValidCoordinate(origin)) {
     throw new RoutingServiceError(
-      'Invalid route coordinate.'
+      'invalid-origin',
+      'The selected origin location is invalid.'
+    );
+  }
+
+  if (!isValidCoordinate(destination)) {
+    throw new RoutingServiceError(
+      'invalid-destination',
+      'The selected destination location is invalid.'
     );
   }
 }
@@ -67,7 +100,7 @@ function flattenGeoJsonCoordinates(
     return [];
   }
 
-  const result: RouteCoordinate[] = [];
+  const coordinates: RouteCoordinate[] = [];
 
   const visit = (item: unknown): void => {
     if (!Array.isArray(item)) {
@@ -79,10 +112,22 @@ function flattenGeoJsonCoordinates(
       typeof item[0] === 'number' &&
       typeof item[1] === 'number'
     ) {
-      result.push({
-        longitude: item[0],
-        latitude: item[1],
-      });
+      const longitude = item[0];
+      const latitude = item[1];
+
+      if (
+        Number.isFinite(latitude) &&
+        Number.isFinite(longitude) &&
+        latitude >= -90 &&
+        latitude <= 90 &&
+        longitude >= -180 &&
+        longitude <= 180
+      ) {
+        coordinates.push({
+          latitude,
+          longitude,
+        });
+      }
 
       return;
     }
@@ -92,27 +137,53 @@ function flattenGeoJsonCoordinates(
 
   visit(value);
 
-  return result;
+  return coordinates;
 }
 
-/**
- * Requests a route from Geoapify between two coordinates.
- *
- * Geoapify is responsible only for the road/walking route geometry,
- * distance and travel time. SafeHer's own services later calculate
- * incident-based safety scores and compare route choices.
- */
-export async function getRoute(
+function convertFeatureToRoute(
+  feature: GeoapifyRouteFeature,
+  index: number
+): RoutingResult | null {
+  const distanceMeters =
+    feature.properties?.distance;
+
+  const durationSeconds =
+    feature.properties?.time;
+
+  const coordinates =
+    flattenGeoJsonCoordinates(
+      feature.geometry?.coordinates
+    );
+
+  if (
+    typeof distanceMeters !== 'number' ||
+    !Number.isFinite(distanceMeters) ||
+    distanceMeters <= 0 ||
+    typeof durationSeconds !== 'number' ||
+    !Number.isFinite(durationSeconds) ||
+    durationSeconds <= 0 ||
+    coordinates.length < 2
+  ) {
+    return null;
+  }
+
+  return {
+    id: `route-${index + 1}`,
+    coordinates,
+    distanceMeters,
+    durationSeconds,
+  };
+}
+
+function buildRoutingUrl(
   origin: RouteCoordinate,
   destination: RouteCoordinate,
-  mode: RoutingMode = 'walk'
-): Promise<RoutingResult> {
-  validateCoordinate(origin);
-  validateCoordinate(destination);
-
+  mode: RoutingMode
+): string {
   if (!geoapifyApiKey) {
     throw new RoutingServiceError(
-      'Missing EXPO_PUBLIC_GEOAPIFY_API_KEY environment variable.'
+      'missing-api-key',
+      'Routing service configuration is missing.'
     );
   }
 
@@ -120,11 +191,33 @@ export async function getRoute(
     `${origin.latitude},${origin.longitude}` +
     `|${destination.latitude},${destination.longitude}`;
 
-  const url =
+  return (
     `${GEOAPIFY_ROUTING_URL}` +
     `?waypoints=${encodeURIComponent(waypoints)}` +
     `&mode=${encodeURIComponent(mode)}` +
-    `&apiKey=${encodeURIComponent(geoapifyApiKey)}`;
+    `&apiKey=${encodeURIComponent(geoapifyApiKey)}`
+  );
+}
+
+/**
+ * Retrieves possible routes between an origin and destination.
+ *
+ * Geoapify returns route geometry, distance and estimated travel time.
+ * If the provider returns multiple route features, all valid routes are
+ * returned so SafeHer can process and compare them later.
+ */
+export async function getRoutes(
+  origin: RouteCoordinate,
+  destination: RouteCoordinate,
+  mode: RoutingMode = 'walk'
+): Promise<RoutingResult[]> {
+  validateCoordinates(origin, destination);
+
+  const url = buildRoutingUrl(
+    origin,
+    destination,
+    mode
+  );
 
   let response: Response;
 
@@ -132,53 +225,83 @@ export async function getRoute(
     response = await fetch(url);
   } catch {
     throw new RoutingServiceError(
-      'Unable to connect to the routing service.'
+      'network-error',
+      'Unable to connect to the routing service. Check your internet connection and try again.'
+    );
+  }
+
+  if (response.status === 429) {
+    throw new RoutingServiceError(
+      'rate-limit',
+      'The routing service request limit has been reached. Please try again later.'
     );
   }
 
   if (!response.ok) {
     throw new RoutingServiceError(
-      `Routing request failed with status ${response.status}.`
+      'service-error',
+      'The routing service is temporarily unavailable. Please try again.'
     );
   }
 
-  const data =
-    (await response.json()) as GeoapifyRoutingResponse;
+  let data: GeoapifyRoutingResponse;
 
-  const route = data.features?.[0];
-
-  if (!route) {
+  try {
+    data =
+      (await response.json()) as GeoapifyRoutingResponse;
+  } catch {
     throw new RoutingServiceError(
-      'No route was returned for these locations.'
+      'invalid-response',
+      'The routing service returned an invalid response.'
     );
   }
 
-  const distanceMeters = route.properties?.distance;
-  const durationSeconds = route.properties?.time;
-
-  if (
-    typeof distanceMeters !== 'number' ||
-    typeof durationSeconds !== 'number'
-  ) {
+  if (!Array.isArray(data.features)) {
     throw new RoutingServiceError(
-      'Routing service returned incomplete route information.'
+      'invalid-response',
+      'The routing service returned an invalid response.'
     );
   }
 
-  const coordinates =
-    flattenGeoJsonCoordinates(
-      route.geometry?.coordinates
-    );
-
-  if (coordinates.length < 2) {
+  if (data.features.length === 0) {
     throw new RoutingServiceError(
-      'Routing service returned invalid route geometry.'
+      'no-route',
+      'No route could be found between the selected locations.'
     );
   }
 
-  return {
-    coordinates,
-    distanceMeters,
-    durationSeconds,
-  };
+  const routes = data.features
+    .map((feature, index) =>
+      convertFeatureToRoute(feature, index)
+    )
+    .filter(
+      (route): route is RoutingResult =>
+        route !== null
+    );
+
+  if (routes.length === 0) {
+    throw new RoutingServiceError(
+      'no-route',
+      'No valid route could be found between the selected locations.'
+    );
+  }
+
+  return routes;
+}
+
+/**
+ * Convenience method for features that only need the first available route.
+ */
+export async function getRoute(
+  origin: RouteCoordinate,
+  destination: RouteCoordinate,
+  mode: RoutingMode = 'walk'
+): Promise<RoutingResult> {
+  const routes = await getRoutes(
+    origin,
+    destination,
+    mode
+  );
+
+  return routes[0];
 }
