@@ -2,6 +2,7 @@ import { Pressable, StyleSheet, Text, View } from 'react-native';
 
 import { Brand } from '@/constants/brand';
 import SafetyScoreBadge from '@/src/components/route/SafetyScoreBadge';
+import SafetyScoreExplanation from '@/src/components/route/SafetyScoreExplanation';
 import type { SafetyLevel } from '@/src/services/safety-score-service';
 import type { RouteOption } from '@/src/types/route';
 
