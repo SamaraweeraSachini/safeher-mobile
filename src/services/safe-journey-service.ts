@@ -5,6 +5,7 @@ import {
   limit,
   query,
   serverTimestamp,
+  Timestamp,
   where,
 } from 'firebase/firestore';
 
@@ -15,6 +16,7 @@ import {
 
 import type {
   SafeJourneyConfiguration,
+  StoredSafeJourney,
 } from '@/src/types/safe-journey';
 
 export type SafeJourneyErrorCode =
@@ -76,7 +78,8 @@ function validateJourney(
   configuration: SafeJourneyConfiguration
 ): void {
   if (
-    configuration.destination.trim().length === 0
+    configuration.destination.trim()
+      .length === 0
   ) {
     throw new SafeJourneyError(
       'destination-required',
@@ -84,15 +87,20 @@ function validateJourney(
     );
   }
 
-  validateCurrentLocation(configuration);
+  validateCurrentLocation(
+    configuration
+  );
 
   const arrivalTime =
     configuration.expectedArrivalTime;
 
   if (
     !(arrivalTime instanceof Date) ||
-    Number.isNaN(arrivalTime.getTime()) ||
-    arrivalTime.getTime() <= Date.now()
+    Number.isNaN(
+      arrivalTime.getTime()
+    ) ||
+    arrivalTime.getTime() <=
+      Date.now()
   ) {
     throw new SafeJourneyError(
       'invalid-arrival-time',
@@ -102,7 +110,8 @@ function validateJourney(
 
   if (
     configuration.shareJourney &&
-    configuration.trustedContactIds.length === 0
+    configuration.trustedContactIds
+      .length === 0
   ) {
     throw new SafeJourneyError(
       'contact-required',
@@ -130,7 +139,9 @@ async function ensureNoActiveJourney(
     );
 
   const snapshot =
-    await getDocs(activeJourneyQuery);
+    await getDocs(
+      activeJourneyQuery
+    );
 
   if (!snapshot.empty) {
     throw new SafeJourneyError(
@@ -172,20 +183,24 @@ export async function createSafeJourney(
       await addDoc(
         journeysRef,
         {
-          userId: currentUser.uid,
+          userId:
+            currentUser.uid,
 
           destination:
             configuration.destination.trim(),
 
           destinationLocation:
-            configuration.destinationLocation ?? null,
+            configuration.destinationLocation ??
+            null,
 
           currentLocation: {
             latitude:
-              configuration.currentLocation.latitude,
+              configuration.currentLocation
+                .latitude,
 
             longitude:
-              configuration.currentLocation.longitude,
+              configuration.currentLocation
+                .longitude,
           },
 
           expectedArrivalTime:
@@ -227,6 +242,145 @@ export async function createSafeJourney(
     throw new SafeJourneyError(
       'firestore-error',
       'Safe Journey could not be saved. Check your connection and try again.'
+    );
+  }
+}
+
+export async function getActiveSafeJourney():
+  Promise<StoredSafeJourney | null> {
+  const currentUser =
+    firebaseAuth.currentUser;
+
+  if (!currentUser) {
+    throw new SafeJourneyError(
+      'not-authenticated',
+      'You must be signed in to view your Safe Journey.'
+    );
+  }
+
+  try {
+    const journeysRef =
+      collection(
+        firestore,
+        'users',
+        currentUser.uid,
+        'safeJourneys'
+      );
+
+    const activeJourneyQuery =
+      query(
+        journeysRef,
+        where('status', '==', 'active'),
+        limit(1)
+      );
+
+    const snapshot =
+      await getDocs(
+        activeJourneyQuery
+      );
+
+    if (snapshot.empty) {
+      return null;
+    }
+
+    const document =
+      snapshot.docs[0];
+
+    const data =
+      document.data();
+
+    const arrivalTimestamp =
+      data.expectedArrivalTime;
+
+    const createdTimestamp =
+      data.createdAt;
+
+    if (
+      !(
+        arrivalTimestamp instanceof
+        Timestamp
+      )
+    ) {
+      throw new SafeJourneyError(
+        'firestore-error',
+        'The active journey contains invalid arrival information.'
+      );
+    }
+
+    const createdAt =
+      createdTimestamp instanceof
+      Timestamp
+        ? createdTimestamp.toDate()
+        : new Date();
+
+    return {
+      id: document.id,
+
+      userId:
+        currentUser.uid,
+
+      destination:
+        typeof data.destination ===
+        'string'
+          ? data.destination
+          : 'Unknown destination',
+
+      destinationLocation:
+        data.destinationLocation ??
+        null,
+
+      currentLocation: {
+        latitude:
+          Number(
+            data.currentLocation
+              ?.latitude
+          ),
+
+        longitude:
+          Number(
+            data.currentLocation
+              ?.longitude
+          ),
+      },
+
+      expectedArrivalTime:
+        arrivalTimestamp.toDate(),
+
+      trustedContactIds:
+        Array.isArray(
+          data.trustedContactIds
+        )
+          ? data.trustedContactIds
+          : [],
+
+      checkInIntervalMinutes:
+        data.checkInIntervalMinutes,
+
+      shareJourney:
+        Boolean(
+          data.shareJourney
+        ),
+
+      status: 'active',
+
+      createdAt,
+    };
+  } catch (error) {
+    if (
+      error instanceof
+      SafeJourneyError
+    ) {
+      throw error;
+    }
+
+    console.error(
+      'Active Safe Journey retrieval failed:',
+      error
+    );
+
+    throw new SafeJourneyError(
+      'firestore-error',
+      'Your active Safe Journey could not be loaded. Check your connection and try again.'
     );
   }
 }

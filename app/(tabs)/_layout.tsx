@@ -14,8 +14,10 @@ export default function TabLayout() {
       backBehavior="history"
       screenOptions={{
         headerShown: false,
-        tabBarActiveTintColor: COLORS.primary,
-        tabBarInactiveTintColor: COLORS.inactive,
+        tabBarActiveTintColor:
+          COLORS.primary,
+        tabBarInactiveTintColor:
+          COLORS.inactive,
         tabBarHideOnKeyboard: true,
         tabBarLabelStyle: {
           fontSize: 11,
@@ -26,9 +28,11 @@ export default function TabLayout() {
           height: 68,
           paddingTop: 7,
           paddingBottom: 9,
-          backgroundColor: COLORS.background,
+          backgroundColor:
+            COLORS.background,
           borderTopWidth: 1,
-          borderTopColor: COLORS.border,
+          borderTopColor:
+            COLORS.border,
           elevation: 10,
           shadowColor: '#5A3D4D',
           shadowOffset: {
@@ -47,7 +51,8 @@ export default function TabLayout() {
         name="index"
         options={{
           title: 'Home',
-          tabBarAccessibilityLabel: 'Home tab',
+          tabBarAccessibilityLabel:
+            'Home tab',
           tabBarIcon: ({
             color,
             focused,
@@ -162,8 +167,17 @@ export default function TabLayout() {
         }}
       />
 
+      {/* Hidden screens */}
+
       <Tabs.Screen
         name="safe-route"
+        options={{
+          href: null,
+        }}
+      />
+
+      <Tabs.Screen
+        name="active-journey"
         options={{
           href: null,
         }}
@@ -198,13 +212,11 @@ export default function TabLayout() {
       />
 
       <Tabs.Screen
-  name="report-confirmation"
-  options={{
-    href: null,
-  }}
-/>
-
-
+        name="report-confirmation"
+        options={{
+          href: null,
+        }}
+      />
 
       <Tabs.Screen
         name="recent-incidents"
@@ -222,4 +234,3 @@ export default function TabLayout() {
     </Tabs>
   );
 }
-

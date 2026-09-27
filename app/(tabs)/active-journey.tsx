@@ -1,5 +1,7 @@
 import { Ionicons } from '@expo/vector-icons';
-import { useRouter } from 'expo-router';
+import {
+  useRouter,
+} from 'expo-router';
 import {
   ActivityIndicator,
   Alert,
@@ -9,16 +11,19 @@ import {
   Text,
   View,
 } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import {
+  SafeAreaView,
+} from 'react-native-safe-area-context';
 
-import { Brand } from '@/constants/brand';
+import {
+  Brand,
+} from '@/constants/brand';
+
 import {
   JOURNEY_TRUSTED_CONTACTS,
 } from '@/constants/safe-journey';
 
-import {
-  useActiveSafeJourney,
-} from '@/src/hooks/useActiveSafeJourney';
+import { useActiveSafeJourney } from '@/src/hooks/useActiveSafeJourney';
 
 function formatDateTime(
   date: Date
@@ -40,7 +45,8 @@ function formatCoordinate(
 }
 
 export default function ActiveJourneyScreen() {
-  const router = useRouter();
+  const router =
+    useRouter();
 
   const {
     journey,
@@ -49,30 +55,34 @@ export default function ActiveJourneyScreen() {
     retry,
   } = useActiveSafeJourney();
 
-  const handleSafePress = () => {
-    Alert.alert(
-      "I'm Safe",
-      'Your safety check-in control is ready.'
-    );
-  };
+  const handleSafePress =
+    () => {
+      Alert.alert(
+        "I'm Safe",
+        'Your safety check-in control is ready.'
+      );
+    };
 
-  const handleEndJourney = () => {
-    Alert.alert(
-      'End Journey',
-      'End Journey control is available. Journey completion will be handled by the journey lifecycle feature.'
-    );
-  };
+  const handleEndJourney =
+    () => {
+      Alert.alert(
+        'End Journey',
+        'End Journey control is available. Journey completion will be handled by the journey lifecycle feature.'
+      );
+    };
 
-  const handleCancelJourney = () => {
-    Alert.alert(
-      'Cancel Journey',
-      'Cancel Journey control is available. Journey cancellation will be handled by the journey lifecycle feature.'
-    );
-  };
+  const handleCancelJourney =
+    () => {
+      Alert.alert(
+        'Cancel Journey',
+        'Cancel Journey control is available. Journey cancellation will be handled by the journey lifecycle feature.'
+      );
+    };
 
-  const handleSosPress = () => {
-    router.push('/(tabs)/sos');
-  };
+  const handleSosPress =
+    () => {
+      router.push('/sos');
+    };
 
   if (isLoading) {
     return (
@@ -80,15 +90,21 @@ export default function ActiveJourneyScreen() {
         style={styles.safeArea}
       >
         <View
-          style={styles.centerState}
+          style={
+            styles.centerState
+          }
         >
           <ActivityIndicator
             size="large"
-            color={Brand.burgundy}
+            color={
+              Brand.burgundy
+            }
           />
 
           <Text
-            style={styles.stateText}
+            style={
+              styles.stateText
+            }
           >
             Loading active journey...
           </Text>
@@ -103,7 +119,9 @@ export default function ActiveJourneyScreen() {
         style={styles.safeArea}
       >
         <View
-          style={styles.centerState}
+          style={
+            styles.centerState
+          }
         >
           <Ionicons
             name="cloud-offline-outline"
@@ -112,23 +130,31 @@ export default function ActiveJourneyScreen() {
           />
 
           <Text
-            style={styles.errorTitle}
+            style={
+              styles.errorTitle
+            }
           >
             Journey unavailable
           </Text>
 
           <Text
-            style={styles.errorText}
+            style={
+              styles.errorText
+            }
           >
             {error}
           </Text>
 
           <Pressable
-            style={styles.retryButton}
+            style={
+              styles.retryButton
+            }
             onPress={retry}
           >
             <Text
-              style={styles.retryButtonText}
+              style={
+                styles.retryButtonText
+              }
             >
               Try Again
             </Text>
@@ -144,37 +170,49 @@ export default function ActiveJourneyScreen() {
         style={styles.safeArea}
       >
         <View
-          style={styles.centerState}
+          style={
+            styles.centerState
+          }
         >
           <Ionicons
             name="navigate-outline"
             size={44}
-            color={Brand.burgundy}
+            color={
+              Brand.burgundy
+            }
           />
 
           <Text
-            style={styles.errorTitle}
+            style={
+              styles.errorTitle
+            }
           >
             No active journey
           </Text>
 
           <Text
-            style={styles.stateText}
+            style={
+              styles.stateText
+            }
           >
             Start a Safe Journey first
             to view its status here.
           </Text>
 
           <Pressable
-            style={styles.retryButton}
+            style={
+              styles.retryButton
+            }
             onPress={() =>
               router.replace(
-                '/(tabs)/journey'
+                '/journey'
               )
             }
           >
             <Text
-              style={styles.retryButtonText}
+              style={
+                styles.retryButtonText
+              }
             >
               Start Journey
             </Text>
@@ -214,27 +252,37 @@ export default function ActiveJourneyScreen() {
         }
       >
         <View
-          style={styles.header}
+          style={
+            styles.header
+          }
         >
           <View
-            style={styles.headerIcon}
+            style={
+              styles.headerIcon
+            }
           >
             <Ionicons
               name="navigate"
               size={24}
-              color={Brand.white}
+              color={
+                Brand.white
+              }
             />
           </View>
 
           <View>
             <Text
-              style={styles.title}
+              style={
+                styles.title
+              }
             >
               Active Journey
             </Text>
 
             <Text
-              style={styles.activeText}
+              style={
+                styles.activeText
+              }
             >
               Journey in progress
             </Text>
@@ -247,7 +295,9 @@ export default function ActiveJourneyScreen() {
           }
         >
           <Text
-            style={styles.smallLabel}
+            style={
+              styles.smallLabel
+            }
           >
             Destination
           </Text>
@@ -260,7 +310,9 @@ export default function ActiveJourneyScreen() {
             <Ionicons
               name="location"
               size={22}
-              color={Brand.burgundy}
+              color={
+                Brand.burgundy
+              }
             />
 
             <Text
@@ -274,26 +326,36 @@ export default function ActiveJourneyScreen() {
         </View>
 
         <View
-          style={styles.section}
+          style={
+            styles.section
+          }
         >
           <Text
-            style={styles.sectionTitle}
+            style={
+              styles.sectionTitle
+            }
           >
             Current location
           </Text>
 
           <View
-            style={styles.infoCard}
+            style={
+              styles.infoCard
+            }
           >
             <Ionicons
               name="locate-outline"
               size={21}
-              color={Brand.burgundy}
+              color={
+                Brand.burgundy
+              }
             />
 
             <View>
               <Text
-                style={styles.infoPrimary}
+                style={
+                  styles.infoPrimary
+                }
               >
                 {formatCoordinate(
                   journey.currentLocation
@@ -318,34 +380,48 @@ export default function ActiveJourneyScreen() {
         </View>
 
         <View
-          style={styles.section}
+          style={
+            styles.section
+          }
         >
           <Text
-            style={styles.sectionTitle}
+            style={
+              styles.sectionTitle
+            }
           >
             Journey times
           </Text>
 
           <View
-            style={styles.timeGrid}
+            style={
+              styles.timeGrid
+            }
           >
             <View
-              style={styles.timeCard}
+              style={
+                styles.timeCard
+              }
             >
               <Ionicons
                 name="play-outline"
                 size={19}
-                color={Brand.burgundy}
+                color={
+                  Brand.burgundy
+                }
               />
 
               <Text
-                style={styles.smallLabel}
+                style={
+                  styles.smallLabel
+                }
               >
                 Started
               </Text>
 
               <Text
-                style={styles.timeValue}
+                style={
+                  styles.timeValue
+                }
               >
                 {formatDateTime(
                   journey.createdAt
@@ -354,22 +430,30 @@ export default function ActiveJourneyScreen() {
             </View>
 
             <View
-              style={styles.timeCard}
+              style={
+                styles.timeCard
+              }
             >
               <Ionicons
                 name="flag-outline"
                 size={19}
-                color={Brand.burgundy}
+                color={
+                  Brand.burgundy
+                }
               />
 
               <Text
-                style={styles.smallLabel}
+                style={
+                  styles.smallLabel
+                }
               >
                 Expected arrival
               </Text>
 
               <Text
-                style={styles.timeValue}
+                style={
+                  styles.timeValue
+                }
               >
                 {formatDateTime(
                   journey.expectedArrivalTime
@@ -380,30 +464,42 @@ export default function ActiveJourneyScreen() {
         </View>
 
         <View
-          style={styles.section}
+          style={
+            styles.section
+          }
         >
           <Text
-            style={styles.sectionTitle}
+            style={
+              styles.sectionTitle
+            }
           >
             Next check-in
           </Text>
 
           <View
-            style={styles.checkInCard}
+            style={
+              styles.checkInCard
+            }
           >
             <View
-              style={styles.checkInIcon}
+              style={
+                styles.checkInIcon
+              }
             >
               <Ionicons
                 name="timer-outline"
                 size={23}
-                color={Brand.white}
+                color={
+                  Brand.white
+                }
               />
             </View>
 
             <View>
               <Text
-                style={styles.checkInTime}
+                style={
+                  styles.checkInTime
+                }
               >
                 {formatDateTime(
                   nextCheckIn
@@ -426,19 +522,26 @@ export default function ActiveJourneyScreen() {
         </View>
 
         <View
-          style={styles.section}
+          style={
+            styles.section
+          }
         >
           <Text
-            style={styles.sectionTitle}
+            style={
+              styles.sectionTitle
+            }
           >
             Trusted contacts
           </Text>
 
-          {contacts.length > 0 ? (
+          {contacts.length >
+          0 ? (
             contacts.map(
               contact => (
                 <View
-                  key={contact.id}
+                  key={
+                    contact.id
+                  }
                   style={
                     styles.contactCard
                   }
@@ -462,19 +565,25 @@ export default function ActiveJourneyScreen() {
                       styles.contactName
                     }
                   >
-                    {contact.name}
+                    {
+                      contact.name
+                    }
                   </Text>
                 </View>
               )
             )
           ) : (
             <View
-              style={styles.infoCard}
+              style={
+                styles.infoCard
+              }
             >
               <Ionicons
                 name="people-outline"
                 size={21}
-                color={Brand.muted}
+                color={
+                  Brand.muted
+                }
               />
 
               <Text
@@ -490,13 +599,19 @@ export default function ActiveJourneyScreen() {
         </View>
 
         <Pressable
-          style={styles.safeButton}
-          onPress={handleSafePress}
+          style={
+            styles.safeButton
+          }
+          onPress={
+            handleSafePress
+          }
         >
           <Ionicons
             name="shield-checkmark"
             size={22}
-            color={Brand.white}
+            color={
+              Brand.white
+            }
           />
 
           <Text
@@ -509,7 +624,9 @@ export default function ActiveJourneyScreen() {
         </Pressable>
 
         <View
-          style={styles.actionRow}
+          style={
+            styles.actionRow
+          }
         >
           <Pressable
             style={
@@ -522,7 +639,9 @@ export default function ActiveJourneyScreen() {
             <Ionicons
               name="checkmark-circle-outline"
               size={20}
-              color={Brand.burgundy}
+              color={
+                Brand.burgundy
+              }
             />
 
             <Text
@@ -545,7 +664,9 @@ export default function ActiveJourneyScreen() {
             <Ionicons
               name="close-circle-outline"
               size={20}
-              color={Brand.burgundy}
+              color={
+                Brand.burgundy
+              }
             />
 
             <Text
@@ -559,8 +680,12 @@ export default function ActiveJourneyScreen() {
         </View>
 
         <Pressable
-          style={styles.sosButton}
-          onPress={handleSosPress}
+          style={
+            styles.sosButton
+          }
+          onPress={
+            handleSosPress
+          }
         >
           <Ionicons
             name="alert-circle"
@@ -585,7 +710,8 @@ const styles =
   StyleSheet.create({
     safeArea: {
       flex: 1,
-      backgroundColor: Brand.cream,
+      backgroundColor:
+        Brand.cream,
     },
 
     content: {
@@ -628,7 +754,8 @@ const styles =
       marginBottom: 22,
       padding: 17,
       borderWidth: 1,
-      borderColor: Brand.line,
+      borderColor:
+        Brand.line,
       borderRadius: 18,
       backgroundColor:
         Brand.white,
@@ -666,7 +793,8 @@ const styles =
       gap: 11,
       padding: 14,
       borderWidth: 1,
-      borderColor: Brand.line,
+      borderColor:
+        Brand.line,
       borderRadius: 15,
       backgroundColor:
         Brand.white,
@@ -694,7 +822,8 @@ const styles =
       minHeight: 105,
       padding: 13,
       borderWidth: 1,
-      borderColor: Brand.line,
+      borderColor:
+        Brand.line,
       borderRadius: 15,
       backgroundColor:
         Brand.white,
@@ -747,7 +876,8 @@ const styles =
       marginBottom: 8,
       padding: 12,
       borderWidth: 1,
-      borderColor: Brand.line,
+      borderColor:
+        Brand.line,
       borderRadius: 14,
       backgroundColor:
         Brand.white,
@@ -777,7 +907,8 @@ const styles =
       justifyContent: 'center',
       gap: 8,
       borderRadius: 15,
-      backgroundColor: '#38785A',
+      backgroundColor:
+        '#38785A',
     },
 
     primaryButtonText: {
@@ -808,7 +939,8 @@ const styles =
     },
 
     secondaryButtonText: {
-      color: Brand.burgundy,
+      color:
+        Brand.burgundy,
       fontSize: 12,
       fontWeight: '800',
     },
@@ -821,7 +953,8 @@ const styles =
       gap: 8,
       marginTop: 11,
       borderRadius: 15,
-      backgroundColor: '#B42318',
+      backgroundColor:
+        '#B42318',
     },
 
     centerState: {
