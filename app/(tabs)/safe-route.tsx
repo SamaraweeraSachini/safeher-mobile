@@ -1,5 +1,6 @@
 import { type Href, useRouter } from 'expo-router';
-import { useMemo } from 'react';
+import * as Location from 'expo-location';
+import { useEffect, useRef, useState } from 'react';
 import {
   ActivityIndicator,
   Pressable,
@@ -9,372 +10,560 @@ import {
   TextInput,
   View,
 } from 'react-native';
+import MapView, { Marker, Polyline } from 'react-native-maps';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
-import RouteChoiceCard from '@/src/components/route/RouteChoiceCard';
-import { useActiveIncidents } from '@/src/hooks/useRecentIncidents';
-import { placeLabel } from '@/src/services/reviewed-route-service';
-import { buildSelectableRoutes } from '@/src/services/route-options-service';
+import RouteComparisonCard from '@/src/components/route/RouteComparisonCard';
 import {
-  getSelectedRouteReview,
-  setSelectedRouteReview,
-} from '@/src/state/selected-route';
+  calculateRouteSafetyScore,
+  getSafetyLevel,
+} from '@/src/services/safety-score-service';
+import {
+  identifyRouteChoices,
+  type ComparedRoute,
+} from '@/src/services/route-comparison-service';
+import { getIncidentsForRouteScoring } from '@/src/services/route-incident-service';
+import {
+  getLocationSuggestions,
+  type LocationSuggestion,
+} from '@/src/services/route-location-service';
+import { getRoutes } from '@/src/services/routing-service';
+import { setSelectedRouteReview } from '@/src/state/selected-route';
 
-import type { RouteOption } from '@/src/types/route';
+function useSuggestions(
+  text: string,
+  selected: LocationSuggestion | null
+) {
+  const [suggestions, setSuggestions] =
+    useState<LocationSuggestion[]>([]);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
-type SelectedLocation = {
-  name: string;
-  latitude: number;
-  longitude: number;
-};
+  useEffect(() => {
+    if (selected || text.trim().length < 3) {
+      setSuggestions([]);
+      setLoading(false);
+      setError(null);
+      return;
+    }
 
-type LocationSuggestion = SelectedLocation & {
-  id: string;
-};
+    const controller = new AbortController();
+
+    setLoading(true);
+    setError(null);
+    setSuggestions([]);
+
+    const timer = setTimeout(() => {
+      getLocationSuggestions(text, controller.signal)
+        .then((items) => {
+          if (!controller.signal.aborted) {
+            setSuggestions(items);
+          }
+        })
+        .catch(() => {
+          if (!controller.signal.aborted) {
+            setError(
+              'Could not find locations. Check your connection and try typing again.'
+            );
+          }
+        })
+        .finally(() => {
+          if (!controller.signal.aborted) {
+            setLoading(false);
+          }
+        });
+    }, 400);
+
+    return () => {
+      clearTimeout(timer);
+      controller.abort();
+    };
+  }, [text, selected]);
+
+  return { suggestions, loading, error };
+}
 
 export default function SafeRouteScreen() {
   const router = useRouter();
+  const mapRef = useRef<MapView | null>(null);
+  const requestVersion = useRef(0);
 
-  const { incidents, isLoading, error, retry } = useActiveIncidents();
-  const routes = useMemo(() => buildSelectableRoutes(incidents), [incidents]);
+  const [originText, setOriginText] = useState('');
+  const [destinationText, setDestinationText] = useState('');
 
-  const reviewRoute = (route: RouteOption) => {
-    const start = route.coordinates[0];
-    const end = route.coordinates[route.coordinates.length - 1];
+  const [origin, setOrigin] =
+    useState<LocationSuggestion | null>(null);
+  const [destination, setDestination] =
+    useState<LocationSuggestion | null>(null);
 
-    setSelectedRouteReview({
-      originLabel: 'Starting point',
-      destinationLabel: 'Destination',
-      route,
-    });
+  const [originError, setOriginError] =
+    useState<string | null>(null);
+  const [destinationError, setDestinationError] =
+    useState<string | null>(null);
 
-    router.push('/route-summary' as Href);
+  const [isLocating, setIsLocating] = useState(false);
+  const [isSearching, setIsSearching] = useState(false);
+  const [searchError, setSearchError] =
+    useState<string | null>(null);
 
-    void Promise.all([
-      placeLabel(start, 'Starting point'),
-      placeLabel(end, 'Destination'),
-    ]).then(([originLabel, destinationLabel]) => {
-      if (getSelectedRouteReview()?.route.id !== route.id) {
+  const [routes, setRoutes] = useState<ComparedRoute[]>([]);
+  const [selectedRouteId, setSelectedRouteId] =
+    useState<string | null>(null);
+
+  const originMatches = useSuggestions(originText, origin);
+  const destinationMatches = useSuggestions(
+    destinationText,
+    destination
+  );
+
+  const selectedRoute =
+    routes.find((route) => route.id === selectedRouteId) ??
+    null;
+
+  useEffect(
+    () => () => {
+      requestVersion.current += 1;
+    },
+    []
+  );
+
+  const invalidateSearch = () => {
+    requestVersion.current += 1;
+    setRoutes([]);
+    setSelectedRouteId(null);
+    setSearchError(null);
+    setIsSearching(false);
+  };
+
+  const changeOrigin = (value: string) => {
+    setOriginText(value);
+    setOrigin(null);
+    setOriginError(null);
+    invalidateSearch();
+  };
+
+  const changeDestination = (value: string) => {
+    setDestinationText(value);
+    setDestination(null);
+    setDestinationError(null);
+    invalidateSearch();
+  };
+
+  const selectOrigin = (place: LocationSuggestion) => {
+    setOrigin(place);
+    setOriginText(place.name);
+    setOriginError(null);
+    invalidateSearch();
+  };
+
+  const selectDestination = (place: LocationSuggestion) => {
+    setDestination(place);
+    setDestinationText(place.name);
+    setDestinationError(null);
+    invalidateSearch();
+  };
+
+  const useCurrentLocation = async () => {
+    setIsLocating(true);
+    setOriginError(null);
+
+    try {
+      const permission =
+        await Location.requestForegroundPermissionsAsync();
+
+      if (permission.status !== 'granted') {
+        throw new Error(
+          'Location permission is required to use your current location. You can also select an origin manually.'
+        );
+      }
+
+      const position = await Location.getCurrentPositionAsync({
+        accuracy: Location.Accuracy.Balanced,
+      });
+
+      selectOrigin({
+        id: 'current-location',
+        name: 'Current location',
+        latitude: position.coords.latitude,
+        longitude: position.coords.longitude,
+      });
+    } catch (error) {
+      setOriginError(
+        error instanceof Error
+          ? error.message
+          : 'Could not get your location.'
+      );
+    } finally {
+      setIsLocating(false);
+    }
+  };
+
+  const swapLocations = () => {
+    setOrigin(destination);
+    setDestination(origin);
+
+    setOriginText(destinationText);
+    setDestinationText(originText);
+
+    setOriginError(null);
+    setDestinationError(null);
+    invalidateSearch();
+  };
+
+  const clearSearch = () => {
+    invalidateSearch();
+
+    setOrigin(null);
+    setDestination(null);
+
+    setOriginText('');
+    setDestinationText('');
+
+    setOriginError(null);
+    setDestinationError(null);
+
+    setSelectedRouteReview(null);
+  };
+
+  const search = async () => {
+    setOriginError(
+      origin ? null : 'Select an origin from the suggestions.'
+    );
+    setDestinationError(
+      destination
+        ? null
+        : 'Select a destination from the suggestions.'
+    );
+
+    if (!origin || !destination) {
+      return;
+    }
+
+    if (
+      origin.latitude === destination.latitude &&
+      origin.longitude === destination.longitude
+    ) {
+      setDestinationError('Choose a different destination.');
+      return;
+    }
+
+    const version = ++requestVersion.current;
+
+    setRoutes([]);
+    setSelectedRouteId(null);
+    setSearchError(null);
+    setIsSearching(true);
+
+    try {
+      const [retrievedRoutes, incidents] = await Promise.all([
+        getRoutes(origin, destination, 'walk'),
+        getIncidentsForRouteScoring(),
+      ]);
+
+      if (version !== requestVersion.current) {
         return;
       }
 
-      setSelectedRouteReview({
-        originLabel,
-        destinationLabel,
-        route,
+      const scoredRoutes = retrievedRoutes.map((route) => {
+        const safety = calculateRouteSafetyScore(
+          route.coordinates,
+          incidents
+        );
+
+        return {
+          ...route,
+          type: 'balanced' as const,
+          safetyScore: safety.score,
+          nearbyIncidentCount: safety.nearbyIncidentCount,
+        };
       });
+
+      const compared = identifyRouteChoices(scoredRoutes);
+
+      setRoutes(compared);
+      setSelectedRouteId(compared[0]?.id ?? null);
+    } catch (error) {
+      if (version === requestVersion.current) {
+        setSearchError(
+          error instanceof Error
+            ? error.message
+            : 'Could not load routes. Please try again.'
+        );
+      }
+    } finally {
+      if (version === requestVersion.current) {
+        setIsSearching(false);
+      }
+    }
+  };
+
+  const fitRoutes = () => {
+    if (routes.length === 0) {
+      return;
+    }
+
+    mapRef.current?.fitToCoordinates(
+      routes.flatMap((route) => route.coordinates),
+      {
+        edgePadding: {
+          top: 50,
+          right: 40,
+          bottom: 50,
+          left: 40,
+        },
+        animated: true,
+      }
+    );
+  };
+
+  const reviewRoute = () => {
+    if (!selectedRoute || !origin || !destination) {
+      return;
+    }
+
+    setSelectedRouteReview({
+      originLabel: origin.name,
+      destinationLabel: destination.name,
+      route: selectedRoute,
     });
+
+    router.push('/route-summary' as Href);
   };
 
   return (
     <SafeAreaView style={styles.safeArea} edges={['top']}>
       <ScrollView
         contentContainerStyle={styles.content}
-        showsVerticalScrollIndicator={false}
         keyboardShouldPersistTaps="handled"
       >
         <Text style={styles.heading}>Safe Route</Text>
 
         <Text style={styles.subheading}>
-          Enter your origin and destination to search for suitable routes.
+          Choose a start and destination to compare walking routes.
         </Text>
 
-        <View style={styles.searchCard}>
-          <Text style={styles.inputLabel}>Origin</Text>
+        <View style={styles.card}>
+          <Text style={styles.label}>Origin</Text>
 
-          <View
-            style={[
-              styles.inputContainer,
-              originError ? styles.inputError : null,
-            ]}
-          >
-            <Text style={styles.inputIcon}>●</Text>
+          <TextInput
+            style={styles.input}
+            value={originText}
+            onChangeText={changeOrigin}
+            placeholder="Enter starting location"
+            accessibilityLabel="Origin"
+          />
 
-            <TextInput
-              style={styles.input}
-              value={origin}
-              onChangeText={handleOriginChange}
-              placeholder="Enter starting location"
-              placeholderTextColor="#9A8790"
-              accessibilityLabel="Origin"
-            />
-          </View>
+          {originError && (
+            <Text style={styles.error}>{originError}</Text>
+          )}
 
-          {originError ? (
-            <Text style={styles.errorText}>{originError}</Text>
-          ) : null}
+          {originMatches.loading && (
+            <ActivityIndicator color="#C43D74" />
+          )}
 
-          {isLoadingOriginSuggestions ? (
-            <View style={styles.suggestionState}>
-              <ActivityIndicator size="small" color="#C43D74" />
+          {originMatches.error && (
+            <Text style={styles.error}>
+              {originMatches.error}
+            </Text>
+          )}
 
-              <Text style={styles.suggestionStateText}>
-                Searching locations...
-              </Text>
-            </View>
-          ) : null}
-
-          {originSuggestions.length > 0 ? (
-            <View style={styles.suggestionsContainer}>
-              {originSuggestions.map((suggestion) => (
-                <Pressable
-                  key={suggestion.id}
-                  style={({ pressed }) => [
-                    styles.suggestionItem,
-                    pressed && styles.pressed,
-                  ]}
-                  onPress={() => handleSelectOrigin(suggestion)}
-                  accessibilityRole="button"
-                  accessibilityLabel={`Select ${suggestion.name}`}
-                >
-                  <Text style={styles.suggestionIcon}>⌖</Text>
-
-                  <Text
-                    style={styles.suggestionText}
-                    numberOfLines={2}
-                  >
-                    {suggestion.name}
-                  </Text>
-                </Pressable>
-              ))}
-            </View>
-          ) : null}
+          {originMatches.suggestions.map((place) => (
+            <Pressable
+              key={place.id}
+              onPress={() => selectOrigin(place)}
+              style={styles.suggestion}
+              accessibilityRole="button"
+              accessibilityLabel={`Select ${place.name} as origin`}
+            >
+              <Text style={styles.body}>{place.name}</Text>
+            </Pressable>
+          ))}
 
           <Pressable
-            style={({ pressed }) => [
-              styles.locationButton,
-              pressed && styles.pressed,
-              isGettingLocation && styles.disabledButton,
-            ]}
-            onPress={handleUseCurrentLocation}
-            disabled={isGettingLocation}
+            style={styles.outlineButton}
+            onPress={useCurrentLocation}
+            disabled={isLocating}
             accessibilityRole="button"
             accessibilityLabel="Use current location as origin"
           >
-            {isGettingLocation ? (
-              <>
-                <ActivityIndicator size="small" color="#C43D74" />
-
-                <Text style={styles.locationButtonText}>
-                  Getting Current Location...
-                </Text>
-              </>
-            ) : (
-              <>
-                <Text style={styles.locationIcon}>⌖</Text>
-
-                <Text style={styles.locationButtonText}>
-                  Use Current Location
-                </Text>
-              </>
-            )}
+            <Text style={styles.outlineText}>
+              {isLocating
+                ? 'Getting location...'
+                : 'Use Current Location'}
+            </Text>
           </Pressable>
 
-          {locationMessage ? (
-            <Text style={styles.locationMessage}>
-              {locationMessage}
-            </Text>
-          ) : null}
-
-          <View style={styles.swapRow}>
-            <View style={styles.swapLine} />
-
-            <Pressable
-              style={({ pressed }) => [
-                styles.swapButton,
-                pressed && styles.pressed,
-              ]}
-              onPress={handleSwap}
-              accessibilityRole="button"
-              accessibilityLabel="Swap origin and destination"
-            >
-              <Text style={styles.swapText}>⇅</Text>
-            </Pressable>
-
-            <View style={styles.swapLine} />
-          </View>
-
-          <Text style={styles.inputLabel}>Destination</Text>
-
-          <View
-            style={[
-              styles.inputContainer,
-              destinationError ? styles.inputError : null,
-            ]}
+          <Pressable
+            onPress={swapLocations}
+            style={styles.outlineButton}
+            accessibilityRole="button"
+            accessibilityLabel="Swap origin and destination"
           >
-            <Text style={styles.inputIcon}>●</Text>
+            <Text style={styles.outlineText}>
+              Swap origin and destination ⇅
+            </Text>
+          </Pressable>
 
-            <TextInput
-              style={styles.input}
-              value={destination}
-              onChangeText={handleDestinationChange}
-              placeholder="Enter destination"
-              placeholderTextColor="#9A8790"
-              accessibilityLabel="Destination"
-            />
-          </View>
+          <Text style={styles.label}>Destination</Text>
 
-          {destinationError ? (
-            <Text style={styles.errorText}>
+          <TextInput
+            style={styles.input}
+            value={destinationText}
+            onChangeText={changeDestination}
+            placeholder="Enter destination"
+            accessibilityLabel="Destination"
+          />
+
+          {destinationError && (
+            <Text style={styles.error}>
               {destinationError}
             </Text>
-          ) : null}
+          )}
 
-          {isLoadingDestinationSuggestions ? (
-            <View style={styles.suggestionState}>
-              <ActivityIndicator size="small" color="#C43D74" />
+          {destinationMatches.loading && (
+            <ActivityIndicator color="#C43D74" />
+          )}
 
-              <Text style={styles.suggestionStateText}>
-                Searching locations...
-              </Text>
-            </View>
-          ) : null}
+          {destinationMatches.error && (
+            <Text style={styles.error}>
+              {destinationMatches.error}
+            </Text>
+          )}
 
-          {destinationSuggestions.length > 0 ? (
-            <View style={styles.suggestionsContainer}>
-              {destinationSuggestions.map((suggestion) => (
-                <Pressable
-                  key={suggestion.id}
-                  style={({ pressed }) => [
-                    styles.suggestionItem,
-                    pressed && styles.pressed,
-                  ]}
-                  onPress={() =>
-                    handleSelectDestination(suggestion)
-                  }
-                  accessibilityRole="button"
-                  accessibilityLabel={`Select ${suggestion.name}`}
-                >
-                  <Text style={styles.suggestionIcon}>⌖</Text>
-
-                  <Text
-                    style={styles.suggestionText}
-                    numberOfLines={2}
-                  >
-                    {suggestion.name}
-                  </Text>
-                </Pressable>
-              ))}
-            </View>
-          ) : null}
+          {destinationMatches.suggestions.map((place) => (
+            <Pressable
+              key={place.id}
+              onPress={() => selectDestination(place)}
+              style={styles.suggestion}
+              accessibilityRole="button"
+              accessibilityLabel={`Select ${place.name} as destination`}
+            >
+              <Text style={styles.body}>{place.name}</Text>
+            </Pressable>
+          ))}
 
           <Pressable
-            style={({ pressed }) => [
-              styles.searchButton,
-              pressed && styles.pressed,
-              isSearching && styles.disabledButton,
+            style={[
+              styles.primaryButton,
+              isSearching && styles.disabled,
             ]}
-            onPress={handleSearch}
+            onPress={search}
             disabled={isSearching}
             accessibilityRole="button"
             accessibilityLabel="Search Routes"
           >
-            {isSearching ? (
-              <>
-                <ActivityIndicator size="small" color="#FFFFFF" />
-
-                <Text style={styles.searchButtonText}>
-                  Searching...
-                </Text>
-              </>
-            ) : (
-              <Text style={styles.searchButtonText}>
-                Search Routes
-              </Text>
-            )}
+            <Text style={styles.primaryText}>
+              {isSearching
+                ? 'Searching routes...'
+                : 'Search Routes'}
+            </Text>
           </Pressable>
 
           <Pressable
-            style={({ pressed }) => [
-              styles.clearButton,
-              pressed && styles.pressed,
-            ]}
-            onPress={handleClear}
+            style={styles.outlineButton}
+            onPress={clearSearch}
             accessibilityRole="button"
             accessibilityLabel="Clear route search"
           >
-            <Text style={styles.clearButtonText}>Clear</Text>
+            <Text style={styles.outlineText}>Clear</Text>
           </Pressable>
 
-          {isSearching ? (
-            <Text style={styles.loadingText}>
-              Searching for available routes...
-            </Text>
-          ) : null}
+          {isSearching && (
+            <ActivityIndicator
+              style={styles.status}
+              color="#C43D74"
+            />
+          )}
 
-          {searchMessage ? (
-            <Text style={styles.messageText}>
-              {searchMessage}
-            </Text>
-          ) : null}
-
-          {searchError ? (
-            <View style={styles.searchErrorContainer}>
-              <Text style={styles.searchErrorText}>
-                {searchError}
-              </Text>
+          {searchError && (
+            <View style={styles.status}>
+              <Text style={styles.error}>{searchError}</Text>
 
               <Pressable
-                style={({ pressed }) => [
-                  styles.retryButton,
-                  pressed && styles.pressed,
-                ]}
-                onPress={handleRetrySearch}
-                disabled={isSearching}
+                style={styles.outlineButton}
+                onPress={search}
                 accessibilityRole="button"
                 accessibilityLabel="Try searching for routes again"
               >
-                <Text style={styles.retryText}>Try Again</Text>
+                <Text style={styles.outlineText}>Try Again</Text>
               </Pressable>
             </View>
-          ) : null}
+          )}
         </View>
 
-        {isLoading && routes.length === 0 && (
-          <View style={styles.stateCard}>
-            <ActivityIndicator color="#C43D74" />
-
-            <Text style={styles.stateText}>
-              Loading reported incidents...
+        {routes.length > 0 && origin && destination && (
+          <>
+            <Text style={styles.sectionTitle}>
+              Compare routes
             </Text>
-          </View>
-        )}
 
-        {!isLoading && error && routes.length === 0 && (
-          <View style={styles.stateCard}>
-            <Text style={styles.stateText}>{error}</Text>
+            <View style={styles.mapContainer}>
+              <MapView
+                ref={mapRef}
+                style={styles.map}
+                onMapReady={fitRoutes}
+                initialRegion={{
+                  latitude: origin.latitude,
+                  longitude: origin.longitude,
+                  latitudeDelta: 0.04,
+                  longitudeDelta: 0.04,
+                }}
+              >
+                {routes.map((route) => (
+                  <Polyline
+                    key={route.id}
+                    coordinates={route.coordinates}
+                    strokeWidth={
+                      selectedRouteId === route.id ? 6 : 3
+                    }
+                    strokeColor={
+                      selectedRouteId === route.id
+                        ? '#C43D74'
+                        : '#688197'
+                    }
+                  />
+                ))}
+
+                <Marker
+                  coordinate={origin}
+                  title="Origin"
+                />
+
+                <Marker
+                  coordinate={destination}
+                  title="Destination"
+                />
+              </MapView>
+            </View>
+
+            {routes.map((route, index) => (
+              <RouteComparisonCard
+                key={route.id}
+                route={{
+                  ...route,
+                  name: `Route ${index + 1}`,
+                  label: route.label,
+                  safetyLevel: getSafetyLevel(
+                    route.safetyScore
+                  ),
+                }}
+                selected={selectedRouteId === route.id}
+                onSelect={setSelectedRouteId}
+              />
+            ))}
 
             <Pressable
-              style={({ pressed }) => [
-                styles.retryButton,
-                pressed && styles.pressed,
-              ]}
-              onPress={retry}
+              style={styles.primaryButton}
+              onPress={reviewRoute}
               accessibilityRole="button"
-              accessibilityLabel="Try loading routes again"
+              accessibilityLabel="Review selected route"
             >
-              <Text style={styles.retryText}>Try Again</Text>
+              <Text style={styles.primaryText}>
+                Review Selected Route
+              </Text>
             </Pressable>
-          </View>
+          </>
         )}
-
-        {!isLoading && !error && routes.length === 0 && (
-          <View style={styles.stateCard}>
-            <Text style={styles.stateText}>
-              Routes appear here once people have shared recent incident
-              reports.
-            </Text>
-          </View>
-        )}
-
-        {routes.map((route) => (
-          <View key={route.id}>
-            <RouteChoiceCard
-              route={route}
-              onReview={reviewRoute}
-            />
-          </View>
-        ))}
       </ScrollView>
     </SafeAreaView>
   );
@@ -385,275 +574,103 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: '#FFF8FB',
   },
-
   content: {
-    paddingHorizontal: 20,
+    paddingHorizontal: 18,
     paddingTop: 12,
-    paddingBottom: 28,
+    paddingBottom: 32,
   },
-
   heading: {
     color: '#32252B',
     fontSize: 28,
     fontWeight: '900',
   },
-
   subheading: {
     marginTop: 6,
     marginBottom: 18,
     color: '#5D4B53',
     fontSize: 14,
-    lineHeight: 20,
   },
-
-  searchCard: {
-    marginBottom: 20,
-    padding: 18,
+  card: {
+    padding: 16,
     borderRadius: 16,
     backgroundColor: '#FFFFFF',
+    marginBottom: 18,
   },
-
-  inputLabel: {
-    marginBottom: 8,
+  label: {
+    marginTop: 14,
+    marginBottom: 6,
     color: '#32252B',
-    fontSize: 14,
     fontWeight: '700',
   },
-
-  inputContainer: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    minHeight: 52,
-    paddingHorizontal: 14,
-    borderWidth: 1,
-    borderColor: '#E5DCE1',
-    borderRadius: 12,
-    backgroundColor: '#FFFDFE',
-  },
-
-  inputError: {
-    borderColor: '#C43D74',
-  },
-
-  inputIcon: {
-    marginRight: 10,
-    color: '#C43D74',
-    fontSize: 13,
-  },
-
   input: {
-    flex: 1,
-    color: '#32252B',
-    fontSize: 15,
-  },
-
-  errorText: {
-    marginTop: 6,
-    color: '#C43D74',
-    fontSize: 13,
-  },
-
-  suggestionsContainer: {
-    marginTop: 8,
-    overflow: 'hidden',
-    borderWidth: 1,
-    borderColor: '#E8DFE4',
-    borderRadius: 12,
-    backgroundColor: '#FFFFFF',
-  },
-
-  suggestionItem: {
-    minHeight: 54,
-    paddingHorizontal: 12,
-    flexDirection: 'row',
-    alignItems: 'center',
-    borderBottomWidth: 1,
-    borderBottomColor: '#F0E9ED',
-  },
-
-  suggestionIcon: {
-    width: 28,
-    color: '#C43D74',
-    fontSize: 20,
-    textAlign: 'center',
-  },
-
-  suggestionText: {
-    flex: 1,
-    marginLeft: 8,
-    color: '#4D3B43',
-    fontSize: 14,
-    lineHeight: 19,
-  },
-
-  suggestionState: {
-    minHeight: 42,
-    marginTop: 8,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 8,
-  },
-
-  suggestionStateText: {
-    color: '#75656C',
-    fontSize: 13,
-  },
-
-  locationButton: {
-    minHeight: 46,
-    marginTop: 10,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 8,
-    borderWidth: 1,
-    borderColor: '#E7B7C9',
-    borderRadius: 12,
-    backgroundColor: '#FFF6F9',
-  },
-
-  locationButtonText: {
-    color: '#C43D74',
-    fontSize: 14,
-    fontWeight: '700',
-  },
-
-  locationIcon: {
-    color: '#C43D74',
-    fontSize: 20,
-  },
-
-  locationMessage: {
-    marginTop: 8,
-    color: '#5D4B53',
-    fontSize: 13,
-    lineHeight: 18,
-    textAlign: 'center',
-  },
-
-  swapRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginVertical: 10,
-  },
-
-  swapLine: {
-    flex: 1,
-    height: 1,
-    backgroundColor: '#E8DFE4',
-  },
-
-  swapButton: {
-    width: 42,
-    height: 42,
-    marginHorizontal: 10,
-    alignItems: 'center',
-    justifyContent: 'center',
-    borderRadius: 21,
-    backgroundColor: '#FCECF3',
-    borderWidth: 1,
-    borderColor: '#F3D1DF',
-  },
-
-  swapText: {
-    color: '#C43D74',
-    fontSize: 24,
-    fontWeight: '700',
-  },
-
-  searchButton: {
-    minHeight: 52,
-    marginTop: 20,
-    alignItems: 'center',
-    justifyContent: 'center',
-    borderRadius: 12,
-    backgroundColor: '#C43D74',
-  },
-
-  searchButtonText: {
-    color: '#FFFFFF',
-    fontSize: 16,
-    fontWeight: '700',
-  },
-
-  clearButton: {
     minHeight: 48,
-    marginTop: 10,
-    alignItems: 'center',
-    justifyContent: 'center',
     borderWidth: 1,
     borderColor: '#D8CBD1',
-    borderRadius: 12,
-  },
-
-  clearButtonText: {
-    color: '#5A3D4D',
-    fontSize: 15,
-    fontWeight: '600',
-  },
-
-  disabledButton: {
-    opacity: 0.7,
-  },
-
-  loadingText: {
-    marginTop: 12,
-    color: '#75656C',
-    fontSize: 13,
-    textAlign: 'center',
-  },
-
-  messageText: {
-    marginTop: 12,
-    color: '#5A3D4D',
-    fontSize: 13,
-    lineHeight: 19,
-    textAlign: 'center',
-  },
-
-  searchErrorContainer: {
-    marginTop: 12,
-    alignItems: 'center',
-    gap: 10,
-  },
-
-  searchErrorText: {
-    color: '#C43D74',
-    fontSize: 13,
-    lineHeight: 19,
-    textAlign: 'center',
-  },
-
-  stateCard: {
-    alignItems: 'center',
-    gap: 12,
-    padding: 20,
-    borderRadius: 16,
+    borderRadius: 10,
+    paddingHorizontal: 12,
+    color: '#32252B',
     backgroundColor: '#FFFFFF',
   },
-
-  stateText: {
-    color: '#5D4B53',
+  body: {
+    color: '#32252B',
     fontSize: 14,
-    lineHeight: 20,
+  },
+  error: {
+    color: '#B42356',
+    marginTop: 8,
+    lineHeight: 19,
+  },
+  suggestion: {
+    paddingVertical: 12,
+    paddingHorizontal: 10,
+    borderBottomWidth: 1,
+    borderColor: '#E8DFE4',
+  },
+  outlineButton: {
+    padding: 12,
+    marginTop: 10,
+    borderWidth: 1,
+    borderColor: '#C43D74',
+    borderRadius: 10,
+    alignItems: 'center',
+  },
+  outlineText: {
+    color: '#9B2D5A',
+    fontWeight: '700',
     textAlign: 'center',
   },
-
-  retryButton: {
-    paddingHorizontal: 18,
-    paddingVertical: 12,
-    borderRadius: 12,
+  primaryButton: {
+    marginTop: 14,
+    marginBottom: 10,
+    padding: 14,
+    borderRadius: 10,
     backgroundColor: '#C43D74',
+    alignItems: 'center',
   },
-
-  retryText: {
+  primaryText: {
     color: '#FFFFFF',
-    fontSize: 14,
     fontWeight: '800',
+    fontSize: 16,
   },
-
-  pressed: {
-    opacity: 0.75,
+  disabled: {
+    opacity: 0.6,
+  },
+  status: {
+    marginTop: 12,
+  },
+  sectionTitle: {
+    color: '#32252B',
+    fontSize: 20,
+    fontWeight: '800',
+    marginBottom: 12,
+  },
+  mapContainer: {
+    height: 250,
+    overflow: 'hidden',
+    borderRadius: 16,
+    marginBottom: 16,
+  },
+  map: {
+    flex: 1,
   },
 });
