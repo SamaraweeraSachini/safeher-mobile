@@ -1,6 +1,7 @@
 import { Ionicons } from '@expo/vector-icons';
 import { useMemo, useState } from 'react';
 import {
+  ActivityIndicator,
   Alert,
   Modal,
   Pressable,
@@ -18,6 +19,14 @@ import {
   CHECK_IN_INTERVALS,
   JOURNEY_TRUSTED_CONTACTS,
 } from '@/constants/safe-journey';
+
+import {
+  createSafeJourney,
+  SafeJourneyError,
+} from '@/src/services/safe-journey-service';
+
+import { useCurrentLocation } from '@/src/hooks/useCurrentLocation';
+import { useLocationPermission } from '@/src/hooks/useLocationPermission';
 
 import type {
   CheckInInterval,
@@ -61,6 +70,22 @@ function formatTime(date: Date): string {
 }
 
 export default function JourneyScreen() {
+  const {
+    permissionState,
+  } = useLocationPermission();
+
+  const {
+    location,
+    isLocationLoading,
+  } = useCurrentLocation(
+    permissionState
+  );
+
+  const [
+    isStartingJourney,
+    setIsStartingJourney,
+  ] = useState(false);
+
   const [destination, setDestination] =
     useState('');
 
@@ -115,7 +140,12 @@ export default function JourneyScreen() {
   const canStartJourney =
     destination.trim().length > 0 &&
     expectedArrivalTime !== null &&
-    selectedContactIds.length > 0;
+    location !== null &&
+    (
+      !shareJourney ||
+      selectedContactIds.length > 0
+    ) &&
+    !isStartingJourney;
 
   const toggleContact = (
     contact: JourneyTrustedContact
@@ -133,58 +163,124 @@ export default function JourneyScreen() {
     );
   };
 
-  const handleStartJourney = () => {
-    if (!destination.trim()) {
-      Alert.alert(
-        'Destination required',
-        'Select or enter your destination before starting the journey.'
-      );
+  const handleStartJourney =
+    async () => {
+      if (
+        destination.trim().length === 0
+      ) {
+        Alert.alert(
+          'Destination required',
+          'Enter your destination before starting the journey.'
+        );
 
-      return;
-    }
+        return;
+      }
 
-    if (!expectedArrivalTime) {
-      Alert.alert(
-        'Arrival time required',
-        'Select your expected arrival time.'
-      );
+      if (!location) {
+        Alert.alert(
+          'Current location required',
+          isLocationLoading
+            ? 'SafeHer is still getting your current location. Please wait a moment and try again.'
+            : 'SafeHer needs your current location before starting a Safe Journey.'
+        );
 
-      return;
-    }
+        return;
+      }
 
-    if (
-      selectedContactIds.length === 0
-    ) {
-      Alert.alert(
-        'Trusted contact required',
-        'Select at least one trusted contact.'
-      );
+      if (!expectedArrivalTime) {
+        Alert.alert(
+          'Arrival time required',
+          'Select your expected arrival time.'
+        );
 
-      return;
-    }
+        return;
+      }
 
-    const configuration:
-      SafeJourneyConfiguration = {
+      if (
+        expectedArrivalTime.getTime() <=
+        Date.now()
+      ) {
+        Alert.alert(
+          'Invalid arrival time',
+          'Expected arrival time must be in the future.'
+        );
+
+        return;
+      }
+
+      if (
+        shareJourney &&
+        selectedContactIds.length === 0
+      ) {
+        Alert.alert(
+          'Trusted contact required',
+          'Select at least one trusted contact when Share Journey is enabled.'
+        );
+
+        return;
+      }
+
+      const configuration:
+        SafeJourneyConfiguration = {
         destination:
           destination.trim(),
+
+        currentLocation: {
+          latitude:
+            location.latitude,
+          longitude:
+            location.longitude,
+        },
+
         expectedArrivalTime,
+
         trustedContactIds:
           selectedContactIds,
+
         checkInIntervalMinutes:
           checkInInterval,
+
         shareJourney,
       };
 
-    console.log(
-      'Safe Journey started:',
-      configuration
-    );
+      try {
+        setIsStartingJourney(true);
 
-    Alert.alert(
-      'Safe Journey started',
-      `Journey to ${configuration.destination} started successfully.`
-    );
-  };
+        const journeyId =
+          await createSafeJourney(
+            configuration
+          );
+
+        console.log(
+          'Safe Journey stored:',
+          journeyId
+        );
+
+        Alert.alert(
+          'Safe Journey started',
+          `Your journey to ${configuration.destination} is now active.`
+        );
+      } catch (error) {
+        if (
+          error instanceof
+          SafeJourneyError
+        ) {
+          Alert.alert(
+            'Could not start journey',
+            error.message
+          );
+
+          return;
+        }
+
+        Alert.alert(
+          'Could not start journey',
+          'Something went wrong. Please try again.'
+        );
+      } finally {
+        setIsStartingJourney(false);
+      }
+    };
 
   return (
     <SafeAreaView
@@ -511,24 +607,32 @@ export default function JourneyScreen() {
               canStartJourney &&
               styles.startButtonPressed,
           ]}
-          onPress={
-            handleStartJourney
-          }
+          onPress={handleStartJourney}
+          disabled={!canStartJourney}
           accessibilityRole="button"
           accessibilityLabel="Start Journey"
         >
-          <Ionicons
-            name="navigate"
-            size={20}
-            color={Brand.white}
-          />
+          {isStartingJourney ? (
+            <ActivityIndicator
+              size="small"
+              color={Brand.white}
+            />
+          ) : (
+            <Ionicons
+              name="navigate"
+              size={20}
+              color={Brand.white}
+            />
+          )}
 
           <Text
             style={
               styles.startButtonText
             }
           >
-            Start Journey
+            {isStartingJourney
+              ? 'Starting Journey...'
+              : 'Start Journey'}
           </Text>
         </Pressable>
       </ScrollView>
