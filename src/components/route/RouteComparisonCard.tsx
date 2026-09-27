@@ -1,4 +1,9 @@
-import { Pressable, StyleSheet, Text, View } from 'react-native';
+import {
+  Pressable,
+  StyleSheet,
+  Text,
+  View,
+} from 'react-native';
 
 import { Brand } from '@/constants/brand';
 import SafetyScoreBadge from '@/src/components/route/SafetyScoreBadge';
@@ -24,45 +29,65 @@ export default function RouteComparisonCard({
   onSelect,
 }: Props) {
   return (
-    <View style={[styles.card, selected && styles.selectedCard]}>
+    <View
+      style={[
+        styles.card,
+        selected && styles.selectedCard,
+      ]}
+    >
       <View style={styles.heading}>
         <View style={styles.headingText}>
           <Text style={styles.name}>{route.name}</Text>
           <Text style={styles.label}>{route.label}</Text>
         </View>
 
-        {selected && <Text style={styles.selectedTag}>Selected</Text>}
+        {selected && (
+          <Text style={styles.selectedTag}>Selected</Text>
+        )}
       </View>
 
       <View style={styles.details}>
         <View style={styles.detail}>
-          <Text style={styles.detailLabel}>Distance</Text>
+          <Text style={styles.detailLabel}>
+            Distance
+          </Text>
+
           <Text style={styles.detailValue}>
             {(route.distanceMeters / 1000).toFixed(1)} km
           </Text>
         </View>
 
         <View style={styles.detail}>
-          <Text style={styles.detailLabel}>Estimated time</Text>
+          <Text style={styles.detailLabel}>
+            Estimated time
+          </Text>
+
           <Text style={styles.detailValue}>
             {Math.round(route.durationSeconds / 60)} min
           </Text>
         </View>
       </View>
 
-      <Text style={styles.sectionLabel}>Safety score</Text>
+      <Text style={styles.sectionLabel}>
+        Safety score
+      </Text>
 
       <SafetyScoreBadge
         score={route.safetyScore}
         level={route.safetyLevel}
       />
 
+      <SafetyScoreExplanation />
+
       <Text style={styles.incidents}>
         Nearby reports: {route.nearbyIncidentCount}
       </Text>
 
       <Pressable
-        style={[styles.button, selected && styles.selectedButton]}
+        style={[
+          styles.button,
+          selected && styles.selectedButton,
+        ]}
         onPress={() => onSelect(route.id)}
         accessibilityRole="button"
         accessibilityLabel={
@@ -72,7 +97,9 @@ export default function RouteComparisonCard({
         }
       >
         <Text style={styles.buttonText}>
-          {selected ? 'Selected Route' : 'Select Route'}
+          {selected
+            ? 'Selected Route'
+            : 'Select Route'}
         </Text>
       </Pressable>
     </View>
