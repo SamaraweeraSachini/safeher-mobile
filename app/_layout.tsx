@@ -17,6 +17,7 @@ import {
   AuthProvider,
   useAuth,
 } from '@/src/context/AuthContext';
+import { PrivacyPreferencesProvider } from '@/src/context/PrivacyPreferencesContext';
 
 export const unstable_settings = {
   initialRouteName: 'splash',
@@ -88,7 +89,9 @@ function RootNavigator() {
 export default function RootLayout() {
   return (
     <AuthProvider>
-      <RootNavigator />
+      <PrivacyPreferencesProvider>
+        <RootNavigator />
+      </PrivacyPreferencesProvider>
     </AuthProvider>
   );
 }

@@ -19,6 +19,7 @@ import {
   getIncidentCategoryLabel,
 } from "@/constants/incident-categories";
 
+import { usePrivacyPreferences } from "@/src/context/PrivacyPreferencesContext";
 import { useRecentIncidents } from "@/src/hooks/useRecentIncidents";
 
 import type {
@@ -430,6 +431,7 @@ function ErrorState({
 }
 
 export default function RecentIncidentsScreen() {
+  const { preferences } = usePrivacyPreferences();
   const [
     selectedIncident,
     setSelectedIncident,
@@ -443,6 +445,34 @@ export default function RecentIncidentsScreen() {
     error,
     retry,
   } = useRecentIncidents();
+
+  if (!preferences.showReportHistory) {
+    return (
+      <SafeAreaView style={styles.safeArea}>
+        <View style={styles.hiddenHistory}>
+          <Ionicons
+            name="eye-off-outline"
+            size={36}
+            color={COLORS.primary}
+          />
+          <Text style={styles.hiddenHistoryTitle}>
+            Report history is hidden
+          </Text>
+          <Text style={styles.hiddenHistoryText}>
+            Turn on Report history in Privacy Settings to see recent incident reports.
+          </Text>
+          <Pressable
+            onPress={() => router.back()}
+            style={styles.hiddenHistoryButton}
+            accessibilityRole="button"
+            accessibilityLabel="Go back"
+          >
+            <Text style={styles.hiddenHistoryButtonText}>Go back</Text>
+          </Pressable>
+        </View>
+      </SafeAreaView>
+    );
+  }
 
   return (
     <SafeAreaView
@@ -910,6 +940,37 @@ export default function RecentIncidentsScreen() {
 }
 
 const styles = StyleSheet.create({
+  hiddenHistory: {
+    flex: 1,
+    alignItems: "center",
+    justifyContent: "center",
+    paddingHorizontal: 28,
+    gap: 12,
+  },
+  hiddenHistoryTitle: {
+    color: COLORS.title,
+    fontSize: 20,
+    fontWeight: "800",
+    textAlign: "center",
+  },
+  hiddenHistoryText: {
+    color: COLORS.text,
+    fontSize: 14,
+    lineHeight: 21,
+    textAlign: "center",
+  },
+  hiddenHistoryButton: {
+    marginTop: 8,
+    paddingHorizontal: 18,
+    paddingVertical: 12,
+    borderRadius: 12,
+    backgroundColor: COLORS.primary,
+  },
+  hiddenHistoryButtonText: {
+    color: "#FFFFFF",
+    fontSize: 14,
+    fontWeight: "800",
+  },
   safeArea: {
     flex: 1,
     backgroundColor:

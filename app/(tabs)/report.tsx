@@ -1,7 +1,7 @@
 import { Ionicons } from "@expo/vector-icons";
 import * as Location from "expo-location";
 import { router } from "expo-router";
-import { useCallback, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import {
   ActivityIndicator,
   Alert,
@@ -18,6 +18,7 @@ import {
 
 import { Brand } from "@/constants/brand";
 import { INCIDENT_CATEGORIES } from "@/constants/incident-categories";
+import { usePrivacyPreferences } from "@/src/context/PrivacyPreferencesContext";
 import {
   createIncidentReport,
   IncidentSubmissionError,
@@ -42,6 +43,8 @@ interface ErrorMessageProps {
 }
 
 export default function ReportScreen() {
+  const { preferences, isReady } = usePrivacyPreferences();
+  const anonymousDefaultChanged = useRef(false);
   const [selectedCategory, setSelectedCategory] =
     useState<IncidentCategoryId | null>(null);
 
@@ -57,6 +60,14 @@ export default function ReportScreen() {
   >(null);
 
   const [reportAnonymously, setReportAnonymously] = useState(true);
+
+  useEffect(() => {
+    if (!isReady || anonymousDefaultChanged.current) {
+      return;
+    }
+
+    setReportAnonymously(preferences.anonymousReportingByDefault);
+  }, [isReady, preferences.anonymousReportingByDefault]);
 
   const [guidelinesAccepted, setGuidelinesAccepted] = useState(false);
 
@@ -95,6 +106,18 @@ export default function ReportScreen() {
 
   const handleSelectLocation = async () => {
     if (isLocationLoading) {
+      return;
+    }
+
+    if (!preferences.allowLocationUse) {
+      setIncidentLocation(null);
+      setLocationSelectionError(
+        "Location use is turned off in Privacy Settings. Turn it on there before selecting a location.",
+      );
+      Alert.alert(
+        "Location is turned off",
+        "Turn on Use location in Privacy Settings if you want this report to include your location.",
+      );
       return;
     }
 
@@ -219,7 +242,8 @@ export default function ReportScreen() {
     setIncidentLocation(null);
     setLocationSelectionError(null);
     setIsLocationLoading(false);
-    setReportAnonymously(true);
+    anonymousDefaultChanged.current = false;
+    setReportAnonymously(preferences.anonymousReportingByDefault);
     setGuidelinesAccepted(false);
     setErrors({});
   };
@@ -364,6 +388,7 @@ export default function ReportScreen() {
           </Text>
         </View>
 
+        {preferences.showReportHistory ? (
         <Pressable
           accessibilityRole="button"
           accessibilityLabel="View recent incidents"
@@ -399,6 +424,7 @@ export default function ReportScreen() {
             color={Brand.burgundy}
           />
         </Pressable>
+        ) : null}
 
         {hasErrors ? (
           <View style={styles.errorSummary}>
@@ -715,7 +741,10 @@ export default function ReportScreen() {
 
           <Switch
             value={reportAnonymously}
-            onValueChange={setReportAnonymously}
+            onValueChange={(value) => {
+              anonymousDefaultChanged.current = true;
+              setReportAnonymously(value);
+            }}
             disabled={isSubmitting}
             trackColor={{
               false: Brand.line,
