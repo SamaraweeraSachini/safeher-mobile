@@ -23,6 +23,7 @@ import {
   JOURNEY_TRUSTED_CONTACTS,
 } from '@/constants/safe-journey';
 
+import { usePrivacyPreferences } from '@/src/context/PrivacyPreferencesContext';
 import { useActiveSafeJourney } from '@/src/hooks/useActiveSafeJourney';
 
 function formatDateTime(
@@ -54,6 +55,9 @@ export default function ActiveJourneyScreen() {
     error,
     retry,
   } = useActiveSafeJourney();
+
+  const { preferences } =
+    usePrivacyPreferences();
 
   const handleSafePress =
     () => {
@@ -476,6 +480,7 @@ export default function ActiveJourneyScreen() {
             Next check-in
           </Text>
 
+          {preferences.safetyAlerts ? (
           <View
             style={
               styles.checkInCard
@@ -519,6 +524,22 @@ export default function ActiveJourneyScreen() {
               </Text>
             </View>
           </View>
+          ) : (
+            <View
+              style={styles.infoCard}
+            >
+              <Ionicons
+                name="notifications-off-outline"
+                size={21}
+                color={Brand.muted}
+              />
+              <Text
+                style={styles.infoSecondary}
+              >
+                Safety check-in alerts are turned off in Privacy Settings.
+              </Text>
+            </View>
+          )}
         </View>
 
         <View
@@ -534,7 +555,22 @@ export default function ActiveJourneyScreen() {
             Trusted contacts
           </Text>
 
-          {contacts.length >
+          {!preferences.shareJourneys ? (
+            <View
+              style={styles.infoCard}
+            >
+              <Ionicons
+                name="eye-off-outline"
+                size={21}
+                color={Brand.muted}
+              />
+              <Text
+                style={styles.infoSecondary}
+              >
+                Journey sharing is turned off, so trusted contacts are not shown.
+              </Text>
+            </View>
+          ) : contacts.length >
           0 ? (
             contacts.map(
               contact => (

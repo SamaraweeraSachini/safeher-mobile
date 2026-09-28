@@ -6,13 +6,19 @@ import {
   useState,
 } from 'react';
 
+import { usePrivacyPreferences } from '@/src/context/PrivacyPreferencesContext';
+
 export type LocationPermissionState =
   | 'loading'
   | 'granted'
   | 'denied'
   | 'unavailable';
 
+const LOCATION_DISABLED_MESSAGE =
+  'Location use is turned off in Privacy Settings. Turn it on there if you want SafeHer to use your location.';
+
 export function useLocationPermission() {
+  const { preferences, isReady } = usePrivacyPreferences();
   const [
     permissionState,
     setPermissionState,
@@ -29,6 +35,12 @@ export function useLocationPermission() {
 
   const requestPermission =
     useCallback(async () => {
+      if (!preferences.allowLocationUse) {
+        setPermissionState('denied');
+        setErrorMessage(LOCATION_DISABLED_MESSAGE);
+        return;
+      }
+
       try {
         setPermissionState(
           'loading'
@@ -87,11 +99,21 @@ export function useLocationPermission() {
           'SafeHer could not check your location permission. Please try again.'
         );
       }
-    }, []);
+    }, [preferences.allowLocationUse]);
 
   useEffect(() => {
+    if (!isReady) {
+      return;
+    }
+
+    if (!preferences.allowLocationUse) {
+      setPermissionState('denied');
+      setErrorMessage(LOCATION_DISABLED_MESSAGE);
+      return;
+    }
+
     requestPermission();
-  }, [requestPermission]);
+  }, [isReady, preferences.allowLocationUse, requestPermission]);
 
   return {
     permissionState,

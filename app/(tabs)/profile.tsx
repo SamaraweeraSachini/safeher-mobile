@@ -1,5 +1,5 @@
 import { Ionicons } from '@expo/vector-icons';
-import { useRouter } from 'expo-router';
+import { type Href, useRouter } from 'expo-router';
 import { useEffect, useState } from 'react';
 import {
     ActivityIndicator,
@@ -274,6 +274,15 @@ export default function ProfileScreen() {
           </Text>
 
           <View style={styles.optionsCard}>
+            <OptionRow
+              icon="options-outline"
+              title="Privacy Settings"
+              description="Choose how SafeHer uses your information"
+              onPress={() => router.push('/privacy-settings' as Href)}
+            />
+
+            <View style={styles.divider} />
+
             <OptionRow
               icon="lock-closed-outline"
               title="Privacy and Safety"

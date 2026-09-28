@@ -28,6 +28,7 @@ import {
   type LocationSuggestion,
 } from '@/src/services/route-location-service';
 import { getRoutes } from '@/src/services/routing-service';
+import { usePrivacyPreferences } from '@/src/context/PrivacyPreferencesContext';
 import { setSelectedRouteReview } from '@/src/state/selected-route';
 
 function useSuggestions(
@@ -85,6 +86,7 @@ function useSuggestions(
 
 export default function SafeRouteScreen() {
   const router = useRouter();
+  const { preferences } = usePrivacyPreferences();
   const mapRef = useRef<MapView | null>(null);
   const requestVersion = useRef(0);
 
@@ -164,6 +166,13 @@ export default function SafeRouteScreen() {
   };
 
   const useCurrentLocation = async () => {
+    if (!preferences.allowLocationUse) {
+      setOriginError(
+        'Location use is turned off in Privacy Settings. Turn it on there, or type an origin instead.'
+      );
+      return;
+    }
+
     setIsLocating(true);
     setOriginError(null);
 
