@@ -285,8 +285,8 @@ export default function ProfileScreen() {
 
             <OptionRow
               icon="lock-closed-outline"
-              title="Privacy and Safety"
-              description="Learn how SafeHer protects your information"
+              title="Privacy information"
+              description="See how location, reports, and trusted contacts are used"
               onPress={() => router.push('/privacy-safety')}
             />
 
