@@ -118,6 +118,13 @@ function getStatusDetails(
   status: IncidentStatus,
 ) {
   switch (status) {
+    case "under-review":
+      return {
+        label: "Under Review",
+        color: COLORS.primary,
+        backgroundColor: COLORS.primarySoft,
+      };
+
     case "resolved":
       return {
         label: "Resolved",

@@ -50,6 +50,14 @@ function getStatusDetails(
   status: IncidentStatus
 ) {
   switch (status) {
+    case 'under-review':
+      return {
+        label: 'Under Review',
+        icon: 'time-outline' as const,
+        color: '#2E6DA4',
+        backgroundColor: '#E7F1FA',
+      };
+
     case 'resolved':
       return {
         label: 'Resolved',

@@ -233,6 +233,13 @@ export default function TabLayout() {
       />
 
       <Tabs.Screen
+        name="my-reports"
+        options={{
+          href: null,
+        }}
+      />
+
+      <Tabs.Screen
         name="explore"
         options={{
           href: null,
