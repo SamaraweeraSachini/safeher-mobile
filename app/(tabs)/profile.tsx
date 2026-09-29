@@ -293,6 +293,15 @@ export default function ProfileScreen() {
             <View style={styles.divider} />
 
             <OptionRow
+              icon="documents-outline"
+              title="My Reports"
+              description="Review the incident reports you submitted"
+              onPress={() => router.push('/my-reports' as Href)}
+            />
+
+            <View style={styles.divider} />
+
+            <OptionRow
               icon="document-text-outline"
               title="Reporting Guidelines"
               description="Read guidance for responsible incident reporting"

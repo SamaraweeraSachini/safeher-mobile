@@ -22,6 +22,7 @@ import type {
   CreateIncidentInput,
   Incident,
   IncidentCoordinates,
+  IncidentStatus,
 } from '@/src/types/incident';
 
 const ACTIVE_INCIDENT_LIMIT = 50;
@@ -377,6 +378,95 @@ export function subscribeToActiveIncidents(
     );
 
   return unsubscribe;
+}
+
+const REPORT_STATUSES: IncidentStatus[] = [
+  'active',
+  'under-review',
+  'resolved',
+  'removed',
+];
+
+function isReportStatus(value: unknown): value is IncidentStatus {
+  return (
+    typeof value === 'string' &&
+    REPORT_STATUSES.includes(value as IncidentStatus)
+  );
+}
+
+function convertUserReportDocument(
+  id: string,
+  data: Record<string, unknown>
+): Incident | null {
+  if (
+    !id ||
+    !isIncidentCategoryId(data.type) ||
+    !isReportStatus(data.status) ||
+    typeof data.description !== 'string' ||
+    typeof data.anonymous !== 'boolean' ||
+    typeof data.creatorUid !== 'string' ||
+    data.creatorUid.trim().length === 0
+  ) {
+    return null;
+  }
+
+  const coordinates = convertCoordinates(data.coordinates);
+  const createdAt = convertCreatedAt(data.createdAt);
+
+  if (!coordinates || createdAt === undefined) {
+    return null;
+  }
+
+  return {
+    id,
+    type: data.type,
+    description: data.description.trim(),
+    coordinates,
+    anonymous: data.anonymous,
+    status: data.status,
+    creatorUid: data.creatorUid,
+    createdAt,
+  };
+}
+
+/**
+ * Subscribes to incident reports created by one registered user.
+ * Includes every report status, not only reports still shown on the map.
+ */
+export function subscribeToUserReports(
+  userId: string,
+  onReportsChanged: (reports: Incident[]) => void,
+  onError: (error: IncidentRetrievalError) => void
+): Unsubscribe {
+  const reportsQuery = query(
+    collection(firestore, 'incidents'),
+    where('creatorUid', '==', userId)
+  );
+
+  return onSnapshot(
+    reportsQuery,
+    (snapshot) => {
+      const reports = snapshot.docs
+        .map((documentSnapshot) =>
+          convertUserReportDocument(
+            documentSnapshot.id,
+            documentSnapshot.data()
+          )
+        )
+        .filter((report): report is Incident => report !== null)
+        .sort(sortIncidentsByNewest);
+
+      onReportsChanged(reports);
+    },
+    (error) => {
+      console.error('User report listener error:', error);
+      onError(
+        new IncidentRetrievalError(
+          'Your reports could not be loaded. Check your connection and try again.'
+        )
+      );
+    }
+  );
 }
 
 export async function createIncidentReport(
