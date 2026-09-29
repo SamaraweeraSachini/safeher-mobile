@@ -104,4 +104,3 @@ const styles = StyleSheet.create({
     backgroundColor: '#FFF8FB',
   },
 });
-
