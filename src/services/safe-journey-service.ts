@@ -603,3 +603,192 @@ export async function cancelSafeJourney(
     );
   }
 }
+
+export async function getSafeJourneyHistory():
+  Promise<StoredSafeJourney[]> {
+  const currentUser =
+    firebaseAuth.currentUser;
+
+  if (!currentUser) {
+    throw new SafeJourneyError(
+      'not-authenticated',
+      'You must be signed in to view your journey history.'
+    );
+  }
+
+  try {
+    const journeysRef =
+      collection(
+        firestore,
+        'users',
+        currentUser.uid,
+        'safeJourneys'
+      );
+
+    const historyQuery =
+      query(
+        journeysRef,
+        where(
+          'status',
+          'in',
+          [
+            'completed',
+            'cancelled',
+          ]
+        )
+      );
+
+    const snapshot =
+      await getDocs(
+        historyQuery
+      );
+
+    const journeys =
+      snapshot.docs.map(
+        document => {
+          const data =
+            document.data();
+
+          const expectedArrivalTimestamp =
+            data.expectedArrivalTime;
+
+          const createdTimestamp =
+            data.createdAt;
+
+          const lastCheckInTimestamp =
+            data.lastCheckInAt;
+
+          const completedTimestamp =
+            data.completedAt;
+
+          const cancelledTimestamp =
+            data.cancelledAt;
+
+          const status =
+            data.status ===
+            'cancelled'
+              ? 'cancelled'
+              : 'completed';
+
+          return {
+            id:
+              document.id,
+
+            userId:
+              currentUser.uid,
+
+            destination:
+              typeof data.destination ===
+              'string'
+                ? data.destination
+                : 'Unknown destination',
+
+            destinationLocation:
+              data.destinationLocation ??
+              null,
+
+            currentLocation: {
+              latitude:
+                Number(
+                  data.currentLocation
+                    ?.latitude
+                ),
+
+              longitude:
+                Number(
+                  data.currentLocation
+                    ?.longitude
+                ),
+            },
+
+            expectedArrivalTime:
+              expectedArrivalTimestamp instanceof
+              Timestamp
+                ? expectedArrivalTimestamp.toDate()
+                : new Date(),
+
+            trustedContactIds:
+              Array.isArray(
+                data.trustedContactIds
+              )
+                ? data.trustedContactIds
+                : [],
+
+            checkInIntervalMinutes:
+              data.checkInIntervalMinutes,
+
+            shareJourney:
+              Boolean(
+                data.shareJourney
+              ),
+
+            status,
+
+            createdAt:
+              createdTimestamp instanceof
+              Timestamp
+                ? createdTimestamp.toDate()
+                : new Date(),
+
+            lastCheckInAt:
+              lastCheckInTimestamp instanceof
+              Timestamp
+                ? lastCheckInTimestamp.toDate()
+                : null,
+
+            completedAt:
+              completedTimestamp instanceof
+              Timestamp
+                ? completedTimestamp.toDate()
+                : null,
+
+            cancelledAt:
+              cancelledTimestamp instanceof
+              Timestamp
+                ? cancelledTimestamp.toDate()
+                : null,
+          } satisfies StoredSafeJourney;
+        }
+      );
+
+    return journeys.sort(
+      (a, b) => {
+        const firstTime =
+          (
+            a.completedAt ??
+            a.cancelledAt ??
+            a.createdAt
+          ).getTime();
+
+        const secondTime =
+          (
+            b.completedAt ??
+            b.cancelledAt ??
+            b.createdAt
+          ).getTime();
+
+        return (
+          secondTime -
+          firstTime
+        );
+      }
+    );
+  } catch (error) {
+    if (
+      error instanceof
+      SafeJourneyError
+    ) {
+      throw error;
+    }
+
+    console.error(
+      'Safe Journey history retrieval failed:',
+      error
+    );
+
+    throw new SafeJourneyError(
+      'firestore-error',
+      'Journey history could not be loaded. Please try again.'
+    );
+  }
+}
