@@ -1,11 +1,13 @@
 import {
   addDoc,
   collection,
+  doc,
   getDocs,
   limit,
   query,
   serverTimestamp,
   Timestamp,
+  updateDoc,
   where,
 } from 'firebase/firestore';
 
@@ -26,6 +28,7 @@ export type SafeJourneyErrorCode =
   | 'invalid-arrival-time'
   | 'contact-required'
   | 'active-journey-exists'
+  | 'journey-not-active'
   | 'firestore-error';
 
 export class SafeJourneyError extends Error {
@@ -134,7 +137,11 @@ async function ensureNoActiveJourney(
   const activeJourneyQuery =
     query(
       journeysRef,
-      where('status', '==', 'active'),
+      where(
+        'status',
+        '==',
+        'active'
+      ),
       limit(1)
     );
 
@@ -164,7 +171,9 @@ export async function createSafeJourney(
     );
   }
 
-  validateJourney(configuration);
+  validateJourney(
+    configuration
+  );
 
   try {
     await ensureNoActiveJourney(
@@ -222,6 +231,9 @@ export async function createSafeJourney(
 
           updatedAt:
             serverTimestamp(),
+
+          lastCheckInAt:
+            null,
         }
       );
 
@@ -270,7 +282,11 @@ export async function getActiveSafeJourney():
     const activeJourneyQuery =
       query(
         journeysRef,
-        where('status', '==', 'active'),
+        where(
+          'status',
+          '==',
+          'active'
+        ),
         limit(1)
       );
 
@@ -295,6 +311,9 @@ export async function getActiveSafeJourney():
     const createdTimestamp =
       data.createdAt;
 
+    const lastCheckInTimestamp =
+      data.lastCheckInAt;
+
     if (
       !(
         arrivalTimestamp instanceof
@@ -314,7 +333,8 @@ export async function getActiveSafeJourney():
         : new Date();
 
     return {
-      id: document.id,
+      id:
+        document.id,
 
       userId:
         currentUser.uid,
@@ -361,9 +381,16 @@ export async function getActiveSafeJourney():
           data.shareJourney
         ),
 
-      status: 'active',
+      status:
+        'active',
 
       createdAt,
+
+      lastCheckInAt:
+        lastCheckInTimestamp instanceof
+        Timestamp
+          ? lastCheckInTimestamp.toDate()
+          : null,
     };
   } catch (error) {
     if (
@@ -381,6 +408,69 @@ export async function getActiveSafeJourney():
     throw new SafeJourneyError(
       'firestore-error',
       'Your active Safe Journey could not be loaded. Check your connection and try again.'
+    );
+  }
+}
+
+export async function recordSafeJourneyCheckIn(
+  journeyId: string
+): Promise<void> {
+  const currentUser =
+    firebaseAuth.currentUser;
+
+  if (!currentUser) {
+    throw new SafeJourneyError(
+      'not-authenticated',
+      'You must be signed in to check in.'
+    );
+  }
+
+  if (!journeyId.trim()) {
+    throw new SafeJourneyError(
+      'journey-not-active',
+      'No active Safe Journey was found.'
+    );
+  }
+
+  try {
+    const journeyRef =
+      doc(
+        firestore,
+        'users',
+        currentUser.uid,
+        'safeJourneys',
+        journeyId
+      );
+
+    await updateDoc(
+      journeyRef,
+      {
+        lastCheckInAt:
+          serverTimestamp(),
+
+        updatedAt:
+          serverTimestamp(),
+
+        status:
+          'active',
+      }
+    );
+  } catch (error) {
+    if (
+      error instanceof
+      SafeJourneyError
+    ) {
+      throw error;
+    }
+
+    console.error(
+      'Safe Journey check-in failed:',
+      error
+    );
+
+    throw new SafeJourneyError(
+      'firestore-error',
+      'Your safety check-in could not be recorded. Please try again.'
     );
   }
 }

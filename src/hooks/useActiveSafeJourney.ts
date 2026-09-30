@@ -74,6 +74,9 @@ export function useActiveSafeJourney() {
     journey,
     isLoading,
     error,
-    retry: loadJourney,
+    retry:
+      loadJourney,
+    refresh:
+      loadJourney,
   };
 }
