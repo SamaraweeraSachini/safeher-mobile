@@ -35,6 +35,8 @@ import {
 } from '@/src/hooks/useActiveSafeJourney';
 
 import {
+  cancelSafeJourney,
+  completeSafeJourney,
   recordSafeJourneyCheckIn,
   SafeJourneyError,
 } from '@/src/services/safe-journey-service';
@@ -65,6 +67,11 @@ export default function ActiveJourneyScreen() {
   const [
     isCheckingIn,
     setIsCheckingIn,
+  ] = useState(false);
+
+  const [
+    isEndingJourney,
+    setIsEndingJourney,
   ] = useState(false);
 
   const {
@@ -126,21 +133,142 @@ export default function ActiveJourneyScreen() {
       }
     };
 
-  const handleEndJourney =
-    () => {
-      Alert.alert(
-        'End Journey',
-        'End Journey control is available. Journey completion will be handled by the journey lifecycle feature.'
-      );
-    };
+  const handleEndJourney = () => {
+    if (!journey) {
+      return;
+    }
 
-  const handleCancelJourney =
-    () => {
-      Alert.alert(
-        'Cancel Journey',
-        'Cancel Journey control is available. Journey cancellation will be handled by the journey lifecycle feature.'
-      );
-    };
+    Alert.alert(
+      'End Journey?',
+      'Are you sure you have reached your destination and want to complete this journey?',
+      [
+        {
+          text: 'Keep Journey Active',
+          style: 'cancel',
+        },
+        {
+          text: 'End Journey',
+          onPress: async () => {
+            try {
+              setIsEndingJourney(
+                true
+              );
+
+              await completeSafeJourney(
+                journey.id
+              );
+
+              Alert.alert(
+                'Journey completed',
+                'Your Safe Journey has been completed successfully.',
+                [
+                  {
+                    text: 'OK',
+                    onPress: () => {
+                      router.replace(
+                        '/journey'
+                      );
+                    },
+                  },
+                ]
+              );
+            } catch (endError) {
+              if (
+                endError instanceof
+                SafeJourneyError
+              ) {
+                Alert.alert(
+                  'Could not end journey',
+                  endError.message
+                );
+
+                return;
+              }
+
+              Alert.alert(
+                'Could not end journey',
+                'Something went wrong. Please try again.'
+              );
+            } finally {
+              setIsEndingJourney(
+                false
+              );
+            }
+          },
+        },
+      ]
+    );
+  };
+
+  const handleCancelJourney = () => {
+    if (!journey) {
+      return;
+    }
+
+    Alert.alert(
+      'Cancel Journey?',
+      'Are you sure you want to cancel this Safe Journey?',
+      [
+        {
+          text: 'Keep Journey Active',
+          style: 'cancel',
+        },
+        {
+          text: 'Cancel Journey',
+          style: 'destructive',
+          onPress: async () => {
+            try {
+              setIsEndingJourney(
+                true
+              );
+
+              await cancelSafeJourney(
+                journey.id
+              );
+
+              Alert.alert(
+                'Journey cancelled',
+                'Your Safe Journey has been cancelled.',
+                [
+                  {
+                    text: 'OK',
+                    onPress: () => {
+                      router.replace(
+                        '/journey'
+                      );
+                    },
+                  },
+                ]
+              );
+            } catch (
+              cancelError
+            ) {
+              if (
+                cancelError instanceof
+                SafeJourneyError
+              ) {
+                Alert.alert(
+                  'Could not cancel journey',
+                  cancelError.message
+                );
+
+                return;
+              }
+
+              Alert.alert(
+                'Could not cancel journey',
+                'Something went wrong. Please try again.'
+              );
+            } finally {
+              setIsEndingJourney(
+                false
+              );
+            }
+          },
+        },
+      ]
+    );
+  };
 
   const handleSosPress =
     () => {
@@ -767,11 +895,16 @@ export default function ActiveJourneyScreen() {
           }
         >
           <Pressable
-            style={
-              styles.secondaryButton
-            }
+            style={[
+              styles.secondaryButton,
+              isEndingJourney &&
+                styles.actionButtonDisabled,
+            ]}
             onPress={
               handleEndJourney
+            }
+            disabled={
+              isEndingJourney
             }
           >
             <Ionicons
@@ -792,11 +925,16 @@ export default function ActiveJourneyScreen() {
           </Pressable>
 
           <Pressable
-            style={
-              styles.secondaryButton
-            }
+            style={[
+              styles.secondaryButton,
+              isEndingJourney &&
+                styles.actionButtonDisabled,
+            ]}
             onPress={
               handleCancelJourney
+            }
+            disabled={
+              isEndingJourney
             }
           >
             <Ionicons
@@ -1080,6 +1218,10 @@ const styles =
       borderRadius: 14,
       backgroundColor:
         Brand.white,
+    },
+
+    actionButtonDisabled: {
+      opacity: 0.5,
     },
 
     secondaryButtonText: {

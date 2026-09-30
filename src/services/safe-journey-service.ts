@@ -234,6 +234,12 @@ export async function createSafeJourney(
 
           lastCheckInAt:
             null,
+
+          completedAt:
+            null,
+
+          cancelledAt:
+            null,
         }
       );
 
@@ -314,6 +320,12 @@ export async function getActiveSafeJourney():
     const lastCheckInTimestamp =
       data.lastCheckInAt;
 
+    const completedTimestamp =
+      data.completedAt;
+
+    const cancelledTimestamp =
+      data.cancelledAt;
+
     if (
       !(
         arrivalTimestamp instanceof
@@ -391,6 +403,18 @@ export async function getActiveSafeJourney():
         Timestamp
           ? lastCheckInTimestamp.toDate()
           : null,
+
+      completedAt:
+        completedTimestamp instanceof
+        Timestamp
+          ? completedTimestamp.toDate()
+          : null,
+
+      cancelledAt:
+        cancelledTimestamp instanceof
+        Timestamp
+          ? cancelledTimestamp.toDate()
+          : null,
     };
   } catch (error) {
     if (
@@ -456,13 +480,6 @@ export async function recordSafeJourneyCheckIn(
       }
     );
   } catch (error) {
-    if (
-      error instanceof
-      SafeJourneyError
-    ) {
-      throw error;
-    }
-
     console.error(
       'Safe Journey check-in failed:',
       error
@@ -471,6 +488,118 @@ export async function recordSafeJourneyCheckIn(
     throw new SafeJourneyError(
       'firestore-error',
       'Your safety check-in could not be recorded. Please try again.'
+    );
+  }
+}
+
+export async function completeSafeJourney(
+  journeyId: string
+): Promise<void> {
+  const currentUser =
+    firebaseAuth.currentUser;
+
+  if (!currentUser) {
+    throw new SafeJourneyError(
+      'not-authenticated',
+      'You must be signed in to complete your journey.'
+    );
+  }
+
+  if (!journeyId.trim()) {
+    throw new SafeJourneyError(
+      'journey-not-active',
+      'No active Safe Journey was found.'
+    );
+  }
+
+  try {
+    const journeyRef =
+      doc(
+        firestore,
+        'users',
+        currentUser.uid,
+        'safeJourneys',
+        journeyId
+      );
+
+    await updateDoc(
+      journeyRef,
+      {
+        status:
+          'completed',
+
+        completedAt:
+          serverTimestamp(),
+
+        updatedAt:
+          serverTimestamp(),
+      }
+    );
+  } catch (error) {
+    console.error(
+      'Safe Journey completion failed:',
+      error
+    );
+
+    throw new SafeJourneyError(
+      'firestore-error',
+      'Your Safe Journey could not be completed. Please try again.'
+    );
+  }
+}
+
+export async function cancelSafeJourney(
+  journeyId: string
+): Promise<void> {
+  const currentUser =
+    firebaseAuth.currentUser;
+
+  if (!currentUser) {
+    throw new SafeJourneyError(
+      'not-authenticated',
+      'You must be signed in to cancel your journey.'
+    );
+  }
+
+  if (!journeyId.trim()) {
+    throw new SafeJourneyError(
+      'journey-not-active',
+      'No active Safe Journey was found.'
+    );
+  }
+
+  try {
+    const journeyRef =
+      doc(
+        firestore,
+        'users',
+        currentUser.uid,
+        'safeJourneys',
+        journeyId
+      );
+
+    await updateDoc(
+      journeyRef,
+      {
+        status:
+          'cancelled',
+
+        cancelledAt:
+          serverTimestamp(),
+
+        updatedAt:
+          serverTimestamp(),
+      }
+    );
+  } catch (error) {
+    console.error(
+      'Safe Journey cancellation failed:',
+      error
+    );
+
+    throw new SafeJourneyError(
+      'firestore-error',
+      'Your Safe Journey could not be cancelled. Please try again.'
     );
   }
 }

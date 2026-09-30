@@ -42,4 +42,6 @@ export interface StoredSafeJourney {
   status: SafeJourneyStatus;
   createdAt: Date;
   lastCheckInAt: Date | null;
+  completedAt: Date | null;
+  cancelledAt: Date | null;
 }
