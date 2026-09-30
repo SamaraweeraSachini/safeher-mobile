@@ -1,19 +1,18 @@
 import { Ionicons } from '@expo/vector-icons';
-import {
-  useRouter,
-} from 'expo-router';
-import {
-  useState,
-} from 'react';
+import { useRouter } from 'expo-router';
+import { useState } from 'react';
+
 import {
   ActivityIndicator,
   Alert,
   Pressable,
   ScrollView,
+  Share,
   StyleSheet,
   Text,
   View,
 } from 'react-native';
+
 import {
   SafeAreaView,
 } from 'react-native-safe-area-context';
@@ -33,6 +32,14 @@ import {
 import {
   useActiveSafeJourney,
 } from '@/src/hooks/useActiveSafeJourney';
+
+import {
+  useCurrentLocation,
+} from '@/src/hooks/useCurrentLocation';
+
+import {
+  useLocationPermission,
+} from '@/src/hooks/useLocationPermission';
 
 import {
   cancelSafeJourney,
@@ -86,6 +93,16 @@ export default function ActiveJourneyScreen() {
     preferences,
   } = usePrivacyPreferences();
 
+  const {
+    permissionState,
+  } = useLocationPermission();
+
+  const {
+    location,
+  } = useCurrentLocation(
+    permissionState
+  );
+
   const handleSafePress =
     async () => {
       if (!journey) {
@@ -133,142 +150,166 @@ export default function ActiveJourneyScreen() {
       }
     };
 
-  const handleEndJourney = () => {
-    if (!journey) {
-      return;
-    }
+  const handleEndJourney =
+    () => {
+      if (!journey) {
+        return;
+      }
 
-    Alert.alert(
-      'End Journey?',
-      'Are you sure you have reached your destination and want to complete this journey?',
-      [
-        {
-          text: 'Keep Journey Active',
-          style: 'cancel',
-        },
-        {
-          text: 'End Journey',
-          onPress: async () => {
-            try {
-              setIsEndingJourney(
-                true
-              );
+      Alert.alert(
+        'End Journey?',
+        'Are you sure you have reached your destination and want to complete this journey?',
+        [
+          {
+            text:
+              'Keep Journey Active',
 
-              await completeSafeJourney(
-                journey.id
-              );
-
-              Alert.alert(
-                'Journey completed',
-                'Your Safe Journey has been completed successfully.',
-                [
-                  {
-                    text: 'OK',
-                    onPress: () => {
-                      router.replace(
-                        '/journey'
-                      );
-                    },
-                  },
-                ]
-              );
-            } catch (endError) {
-              if (
-                endError instanceof
-                SafeJourneyError
-              ) {
-                Alert.alert(
-                  'Could not end journey',
-                  endError.message
-                );
-
-                return;
-              }
-
-              Alert.alert(
-                'Could not end journey',
-                'Something went wrong. Please try again.'
-              );
-            } finally {
-              setIsEndingJourney(
-                false
-              );
-            }
+            style:
+              'cancel',
           },
-        },
-      ]
-    );
-  };
+          {
+            text:
+              'End Journey',
 
-  const handleCancelJourney = () => {
-    if (!journey) {
-      return;
-    }
+            onPress:
+              async () => {
+                try {
+                  setIsEndingJourney(
+                    true
+                  );
 
-    Alert.alert(
-      'Cancel Journey?',
-      'Are you sure you want to cancel this Safe Journey?',
-      [
-        {
-          text: 'Keep Journey Active',
-          style: 'cancel',
-        },
-        {
-          text: 'Cancel Journey',
-          style: 'destructive',
-          onPress: async () => {
-            try {
-              setIsEndingJourney(
-                true
-              );
+                  await completeSafeJourney(
+                    journey.id
+                  );
 
-              await cancelSafeJourney(
-                journey.id
-              );
+                  Alert.alert(
+                    'Journey completed',
+                    'Your Safe Journey has been completed successfully.',
+                    [
+                      {
+                        text:
+                          'OK',
 
-              Alert.alert(
-                'Journey cancelled',
-                'Your Safe Journey has been cancelled.',
-                [
-                  {
-                    text: 'OK',
-                    onPress: () => {
-                      router.replace(
-                        '/journey'
-                      );
-                    },
-                  },
-                ]
-              );
-            } catch (
-              cancelError
-            ) {
-              if (
-                cancelError instanceof
-                SafeJourneyError
-              ) {
-                Alert.alert(
-                  'Could not cancel journey',
-                  cancelError.message
-                );
+                        onPress:
+                          () => {
+                            router.replace(
+                              '/journey'
+                            );
+                          },
+                      },
+                    ]
+                  );
+                } catch (
+                  endError
+                ) {
+                  if (
+                    endError instanceof
+                    SafeJourneyError
+                  ) {
+                    Alert.alert(
+                      'Could not end journey',
+                      endError.message
+                    );
 
-                return;
-              }
+                    return;
+                  }
 
-              Alert.alert(
-                'Could not cancel journey',
-                'Something went wrong. Please try again.'
-              );
-            } finally {
-              setIsEndingJourney(
-                false
-              );
-            }
+                  Alert.alert(
+                    'Could not end journey',
+                    'Something went wrong. Please try again.'
+                  );
+                } finally {
+                  setIsEndingJourney(
+                    false
+                  );
+                }
+              },
           },
-        },
-      ]
-    );
-  };
+        ]
+      );
+    };
+
+  const handleCancelJourney =
+    () => {
+      if (!journey) {
+        return;
+      }
+
+      Alert.alert(
+        'Cancel Journey?',
+        'Are you sure you want to cancel this Safe Journey?',
+        [
+          {
+            text:
+              'Keep Journey Active',
+
+            style:
+              'cancel',
+          },
+          {
+            text:
+              'Cancel Journey',
+
+            style:
+              'destructive',
+
+            onPress:
+              async () => {
+                try {
+                  setIsEndingJourney(
+                    true
+                  );
+
+                  await cancelSafeJourney(
+                    journey.id
+                  );
+
+                  Alert.alert(
+                    'Journey cancelled',
+                    'Your Safe Journey has been cancelled.',
+                    [
+                      {
+                        text:
+                          'OK',
+
+                        onPress:
+                          () => {
+                            router.replace(
+                              '/journey'
+                            );
+                          },
+                      },
+                    ]
+                  );
+                } catch (
+                  cancelError
+                ) {
+                  if (
+                    cancelError instanceof
+                    SafeJourneyError
+                  ) {
+                    Alert.alert(
+                      'Could not cancel journey',
+                      cancelError.message
+                    );
+
+                    return;
+                  }
+
+                  Alert.alert(
+                    'Could not cancel journey',
+                    'Something went wrong. Please try again.'
+                  );
+                } finally {
+                  setIsEndingJourney(
+                    false
+                  );
+                }
+              },
+          },
+        ]
+      );
+    };
 
   const handleSosPress =
     () => {
@@ -277,10 +318,70 @@ export default function ActiveJourneyScreen() {
       );
     };
 
+  const handleShareLocation =
+    async () => {
+      if (!journey) {
+        return;
+      }
+
+      const latitude =
+        location?.latitude ??
+        journey.currentLocation
+          .latitude;
+
+      const longitude =
+        location?.longitude ??
+        journey.currentLocation
+          .longitude;
+
+      if (
+        !Number.isFinite(
+          latitude
+        ) ||
+        !Number.isFinite(
+          longitude
+        )
+      ) {
+        Alert.alert(
+          'Location unavailable',
+          'Your current location could not be shared.'
+        );
+
+        return;
+      }
+
+      const googleMapsLink =
+        `https://www.google.com/maps?q=${latitude},${longitude}`;
+
+      try {
+        await Share.share({
+          title:
+            'SafeHer Journey Location',
+
+          message:
+            `My current SafeHer journey location:\n${googleMapsLink}`,
+        });
+      } catch (
+        shareError
+      ) {
+        console.error(
+          'Location sharing failed:',
+          shareError
+        );
+
+        Alert.alert(
+          'Sharing failed',
+          'Your location could not be shared. Please try again.'
+        );
+      }
+    };
+
   if (isLoading) {
     return (
       <SafeAreaView
-        style={styles.safeArea}
+        style={
+          styles.safeArea
+        }
       >
         <View
           style={
@@ -309,7 +410,9 @@ export default function ActiveJourneyScreen() {
   if (error) {
     return (
       <SafeAreaView
-        style={styles.safeArea}
+        style={
+          styles.safeArea
+        }
       >
         <View
           style={
@@ -362,7 +465,9 @@ export default function ActiveJourneyScreen() {
   if (!journey) {
     return (
       <SafeAreaView
-        style={styles.safeArea}
+        style={
+          styles.safeArea
+        }
       >
         <View
           style={
@@ -439,7 +544,9 @@ export default function ActiveJourneyScreen() {
 
   return (
     <SafeAreaView
-      style={styles.safeArea}
+      style={
+        styles.safeArea
+      }
       edges={['top']}
     >
       <ScrollView
@@ -519,7 +626,9 @@ export default function ActiveJourneyScreen() {
                 styles.destinationText
               }
             >
-              {journey.destination}
+              {
+                journey.destination
+              }
             </Text>
           </View>
         </View>
@@ -557,13 +666,17 @@ export default function ActiveJourneyScreen() {
                 }
               >
                 {formatCoordinate(
-                  journey.currentLocation
-                    .latitude
+                  location?.latitude ??
+                    journey
+                      .currentLocation
+                      .latitude
                 )}
                 ,{' '}
                 {formatCoordinate(
-                  journey.currentLocation
-                    .longitude
+                  location?.longitude ??
+                    journey
+                      .currentLocation
+                      .longitude
                 )}
               </Text>
 
@@ -572,7 +685,9 @@ export default function ActiveJourneyScreen() {
                   styles.infoSecondary
                 }
               >
-                Journey starting location
+                {location
+                  ? 'Current device location'
+                  : 'Journey starting location'}
               </Text>
             </View>
           </View>
@@ -713,7 +828,8 @@ export default function ActiveJourneyScreen() {
                 >
                   Every{' '}
                   {
-                    journey.checkInIntervalMinutes
+                    journey
+                      .checkInIntervalMinutes
                   }{' '}
                   minutes
                 </Text>
@@ -847,8 +963,36 @@ export default function ActiveJourneyScreen() {
         </View>
 
         <Pressable
+          style={
+            styles.shareLocationButton
+          }
+          onPress={
+            handleShareLocation
+          }
+          accessibilityRole="button"
+          accessibilityLabel="Share current location"
+        >
+          <Ionicons
+            name="share-social-outline"
+            size={21}
+            color={
+              Brand.burgundy
+            }
+          />
+
+          <Text
+            style={
+              styles.shareLocationButtonText
+            }
+          >
+            Share Current Location
+          </Text>
+        </Pressable>
+
+        <Pressable
           style={[
             styles.safeButton,
+
             isCheckingIn &&
               styles.safeButtonDisabled,
           ]}
@@ -897,6 +1041,7 @@ export default function ActiveJourneyScreen() {
           <Pressable
             style={[
               styles.secondaryButton,
+
               isEndingJourney &&
                 styles.actionButtonDisabled,
             ]}
@@ -927,6 +1072,7 @@ export default function ActiveJourneyScreen() {
           <Pressable
             style={[
               styles.secondaryButton,
+
               isEndingJourney &&
                 styles.actionButtonDisabled,
             ]}
@@ -966,7 +1112,9 @@ export default function ActiveJourneyScreen() {
           <Ionicons
             name="alert-circle"
             size={22}
-            color="#FFFFFF"
+            color={
+              Brand.white
+            }
           />
 
           <Text
@@ -1007,7 +1155,8 @@ const styles =
       width: 48,
       height: 48,
       alignItems: 'center',
-      justifyContent: 'center',
+      justifyContent:
+        'center',
       borderRadius: 15,
       backgroundColor:
         Brand.burgundy,
@@ -1136,7 +1285,8 @@ const styles =
       width: 44,
       height: 44,
       alignItems: 'center',
-      justifyContent: 'center',
+      justifyContent:
+        'center',
       borderRadius: 22,
       backgroundColor:
         Brand.burgundy,
@@ -1165,7 +1315,8 @@ const styles =
       width: 38,
       height: 38,
       alignItems: 'center',
-      justifyContent: 'center',
+      justifyContent:
+        'center',
       borderRadius: 19,
       backgroundColor:
         Brand.blush,
@@ -1178,11 +1329,35 @@ const styles =
       fontWeight: '700',
     },
 
+    shareLocationButton: {
+      minHeight: 52,
+      flexDirection: 'row',
+      alignItems: 'center',
+      justifyContent:
+        'center',
+      gap: 8,
+      marginBottom: 11,
+      borderWidth: 1,
+      borderColor:
+        Brand.burgundy,
+      borderRadius: 15,
+      backgroundColor:
+        Brand.white,
+    },
+
+    shareLocationButtonText: {
+      color:
+        Brand.burgundy,
+      fontSize: 14,
+      fontWeight: '800',
+    },
+
     safeButton: {
       minHeight: 54,
       flexDirection: 'row',
       alignItems: 'center',
-      justifyContent: 'center',
+      justifyContent:
+        'center',
       gap: 8,
       borderRadius: 15,
       backgroundColor:
@@ -1194,7 +1369,8 @@ const styles =
     },
 
     primaryButtonText: {
-      color: '#FFFFFF',
+      color:
+        Brand.white,
       fontSize: 15,
       fontWeight: '800',
     },
@@ -1210,7 +1386,8 @@ const styles =
       minHeight: 50,
       flexDirection: 'row',
       alignItems: 'center',
-      justifyContent: 'center',
+      justifyContent:
+        'center',
       gap: 6,
       borderWidth: 1,
       borderColor:
@@ -1235,7 +1412,8 @@ const styles =
       minHeight: 54,
       flexDirection: 'row',
       alignItems: 'center',
-      justifyContent: 'center',
+      justifyContent:
+        'center',
       gap: 8,
       marginTop: 11,
       borderRadius: 15,
@@ -1246,7 +1424,8 @@ const styles =
     centerState: {
       flex: 1,
       alignItems: 'center',
-      justifyContent: 'center',
+      justifyContent:
+        'center',
       paddingHorizontal: 30,
     },
 
@@ -1283,7 +1462,8 @@ const styles =
     },
 
     retryButtonText: {
-      color: Brand.white,
+      color:
+        Brand.white,
       fontSize: 13,
       fontWeight: '800',
     },

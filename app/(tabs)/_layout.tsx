@@ -72,6 +72,13 @@ export default function TabLayout() {
       />
 
       <Tabs.Screen
+  name="journey-history"
+  options={{
+    href: null,
+  }}
+/>
+
+      <Tabs.Screen
         name="safety-map"
         options={{
           title: 'Safety Map',
