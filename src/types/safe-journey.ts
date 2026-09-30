@@ -41,4 +41,5 @@ export interface StoredSafeJourney {
   shareJourney: boolean;
   status: SafeJourneyStatus;
   createdAt: Date;
+  lastCheckInAt: Date | null;
 }

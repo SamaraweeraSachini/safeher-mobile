@@ -3,6 +3,9 @@ import {
   useRouter,
 } from 'expo-router';
 import {
+  useState,
+} from 'react';
+import {
   ActivityIndicator,
   Alert,
   Pressable,
@@ -23,8 +26,18 @@ import {
   JOURNEY_TRUSTED_CONTACTS,
 } from '@/constants/safe-journey';
 
-import { usePrivacyPreferences } from '@/src/context/PrivacyPreferencesContext';
-import { useActiveSafeJourney } from '@/src/hooks/useActiveSafeJourney';
+import {
+  usePrivacyPreferences,
+} from '@/src/context/PrivacyPreferencesContext';
+
+import {
+  useActiveSafeJourney,
+} from '@/src/hooks/useActiveSafeJourney';
+
+import {
+  recordSafeJourneyCheckIn,
+  SafeJourneyError,
+} from '@/src/services/safe-journey-service';
 
 function formatDateTime(
   date: Date
@@ -49,22 +62,68 @@ export default function ActiveJourneyScreen() {
   const router =
     useRouter();
 
+  const [
+    isCheckingIn,
+    setIsCheckingIn,
+  ] = useState(false);
+
   const {
     journey,
     isLoading,
     error,
     retry,
+    refresh,
   } = useActiveSafeJourney();
 
-  const { preferences } =
-    usePrivacyPreferences();
+  const {
+    preferences,
+  } = usePrivacyPreferences();
 
   const handleSafePress =
-    () => {
-      Alert.alert(
-        "I'm Safe",
-        'Your safety check-in control is ready.'
-      );
+    async () => {
+      if (!journey) {
+        return;
+      }
+
+      try {
+        setIsCheckingIn(
+          true
+        );
+
+        await recordSafeJourneyCheckIn(
+          journey.id
+        );
+
+        await refresh();
+
+        Alert.alert(
+          "You're checked in",
+          'Your safety check-in was recorded successfully.'
+        );
+      } catch (
+        checkInError
+      ) {
+        if (
+          checkInError instanceof
+          SafeJourneyError
+        ) {
+          Alert.alert(
+            'Check-in failed',
+            checkInError.message
+          );
+
+          return;
+        }
+
+        Alert.alert(
+          'Check-in failed',
+          'Your safety check-in could not be recorded. Please try again.'
+        );
+      } finally {
+        setIsCheckingIn(
+          false
+        );
+      }
     };
 
   const handleEndJourney =
@@ -85,7 +144,9 @@ export default function ActiveJourneyScreen() {
 
   const handleSosPress =
     () => {
-      router.push('/sos');
+      router.push(
+        '/sos'
+      );
     };
 
   if (isLoading) {
@@ -153,7 +214,9 @@ export default function ActiveJourneyScreen() {
             style={
               styles.retryButton
             }
-            onPress={retry}
+            onPress={
+              retry
+            }
           >
             <Text
               style={
@@ -226,9 +289,13 @@ export default function ActiveJourneyScreen() {
     );
   }
 
+  const lastCheckInReference =
+    journey.lastCheckInAt ??
+    journey.createdAt;
+
   const nextCheckIn =
     new Date(
-      journey.createdAt.getTime() +
+      lastCheckInReference.getTime() +
         journey.checkInIntervalMinutes *
           60 *
           1000
@@ -481,62 +548,71 @@ export default function ActiveJourneyScreen() {
           </Text>
 
           {preferences.safetyAlerts ? (
-          <View
-            style={
-              styles.checkInCard
-            }
-          >
             <View
               style={
-                styles.checkInIcon
+                styles.checkInCard
+              }
+            >
+              <View
+                style={
+                  styles.checkInIcon
+                }
+              >
+                <Ionicons
+                  name="timer-outline"
+                  size={23}
+                  color={
+                    Brand.white
+                  }
+                />
+              </View>
+
+              <View>
+                <Text
+                  style={
+                    styles.checkInTime
+                  }
+                >
+                  {formatDateTime(
+                    nextCheckIn
+                  )}
+                </Text>
+
+                <Text
+                  style={
+                    styles.infoSecondary
+                  }
+                >
+                  Every{' '}
+                  {
+                    journey.checkInIntervalMinutes
+                  }{' '}
+                  minutes
+                </Text>
+              </View>
+            </View>
+          ) : (
+            <View
+              style={
+                styles.infoCard
               }
             >
               <Ionicons
-                name="timer-outline"
-                size={23}
+                name="notifications-off-outline"
+                size={21}
                 color={
-                  Brand.white
+                  Brand.muted
                 }
               />
-            </View>
-
-            <View>
-              <Text
-                style={
-                  styles.checkInTime
-                }
-              >
-                {formatDateTime(
-                  nextCheckIn
-                )}
-              </Text>
 
               <Text
                 style={
                   styles.infoSecondary
                 }
               >
-                Every{' '}
-                {
-                  journey.checkInIntervalMinutes
-                }{' '}
-                minutes
-              </Text>
-            </View>
-          </View>
-          ) : (
-            <View
-              style={styles.infoCard}
-            >
-              <Ionicons
-                name="notifications-off-outline"
-                size={21}
-                color={Brand.muted}
-              />
-              <Text
-                style={styles.infoSecondary}
-              >
-                Safety check-in alerts are turned off in Privacy Settings.
+                Safety check-in alerts are
+                turned off in Privacy
+                Settings.
               </Text>
             </View>
           )}
@@ -557,21 +633,29 @@ export default function ActiveJourneyScreen() {
 
           {!preferences.shareJourneys ? (
             <View
-              style={styles.infoCard}
+              style={
+                styles.infoCard
+              }
             >
               <Ionicons
                 name="eye-off-outline"
                 size={21}
-                color={Brand.muted}
+                color={
+                  Brand.muted
+                }
               />
+
               <Text
-                style={styles.infoSecondary}
+                style={
+                  styles.infoSecondary
+                }
               >
-                Journey sharing is turned off, so trusted contacts are not shown.
+                Journey sharing is turned
+                off, so trusted contacts
+                are not shown.
               </Text>
             </View>
-          ) : contacts.length >
-          0 ? (
+          ) : contacts.length > 0 ? (
             contacts.map(
               contact => (
                 <View
@@ -635,27 +719,45 @@ export default function ActiveJourneyScreen() {
         </View>
 
         <Pressable
-          style={
-            styles.safeButton
-          }
+          style={[
+            styles.safeButton,
+            isCheckingIn &&
+              styles.safeButtonDisabled,
+          ]}
           onPress={
             handleSafePress
           }
+          disabled={
+            isCheckingIn
+          }
+          accessibilityRole="button"
+          accessibilityLabel="I'm Safe"
         >
-          <Ionicons
-            name="shield-checkmark"
-            size={22}
-            color={
-              Brand.white
-            }
-          />
+          {isCheckingIn ? (
+            <ActivityIndicator
+              size="small"
+              color={
+                Brand.white
+              }
+            />
+          ) : (
+            <Ionicons
+              name="shield-checkmark"
+              size={22}
+              color={
+                Brand.white
+              }
+            />
+          )}
 
           <Text
             style={
               styles.primaryButtonText
             }
           >
-            I&apos;m Safe
+            {isCheckingIn
+              ? 'Checking In...'
+              : "I'm Safe"}
           </Text>
         </Pressable>
 
@@ -843,9 +945,11 @@ const styles =
     },
 
     infoSecondary: {
+      flex: 1,
       marginTop: 2,
       color: Brand.muted,
       fontSize: 11,
+      lineHeight: 16,
     },
 
     timeGrid: {
@@ -945,6 +1049,10 @@ const styles =
       borderRadius: 15,
       backgroundColor:
         '#38785A',
+    },
+
+    safeButtonDisabled: {
+      opacity: 0.6,
     },
 
     primaryButtonText: {
