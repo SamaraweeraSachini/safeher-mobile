@@ -1,9 +1,8 @@
 import { Ionicons } from '@expo/vector-icons';
-import { useRouter } from 'expo-router';
+import { type Href, useRouter } from 'expo-router';
 import { useEffect, useState } from 'react';
 import {
   ActivityIndicator,
-  Modal,
   Pressable,
   ScrollView,
   StyleSheet,
@@ -16,6 +15,7 @@ import { getIncidentCategoryLabel } from '@/constants/incident-categories';
 import { useAuth } from '@/src/context/AuthContext';
 import { usePrivacyPreferences } from '@/src/context/PrivacyPreferencesContext';
 import { useMyReports } from '@/src/hooks/useMyReports';
+import { subscribeToRemovedReports } from '@/src/services/report-withdrawal-service';
 import { placeLabel } from '@/src/services/reviewed-route-service';
 
 import type { Incident, IncidentStatus } from '@/src/types/incident';
@@ -50,19 +50,6 @@ function shortDescription(description: string): string {
   }
 
   return `${readable.slice(0, 87)}...`;
-}
-
-function statusExplanation(status: IncidentStatus): string {
-  switch (status) {
-    case 'under-review':
-      return 'This report is under review. It is not shown as an active map report while it is being checked.';
-    case 'resolved':
-      return 'This report is resolved. It is no longer shown as an active incident on the map.';
-    case 'removed':
-      return 'This report was removed. Other people cannot see it on the map.';
-    case 'active':
-      return 'This report is active. Other people can see the incident on the map, without your name.';
-  }
 }
 
 function statusLabel(status: IncidentStatus): string {
@@ -104,8 +91,19 @@ export default function MyReportsScreen() {
     user?.uid ?? null,
     canLoadReports
   );
-  const [selectedReport, setSelectedReport] = useState<Incident | null>(null);
   const [placeNames, setPlaceNames] = useState<Record<string, string>>({});
+  const [removedReports, setRemovedReports] = useState<
+    { reportId: string; reason: string }[]
+  >([]);
+
+  useEffect(() => {
+    if (!canLoadReports || !user?.uid) {
+      setRemovedReports([]);
+      return;
+    }
+
+    return subscribeToRemovedReports(user.uid, setRemovedReports);
+  }, [canLoadReports, user?.uid]);
 
   useEffect(() => {
     let cancelled = false;
@@ -179,26 +177,27 @@ export default function MyReportsScreen() {
             message="You have not submitted any incident reports."
           />
         ) : (
-          reports.map((report) => (
-            <ReportCard
-              key={report.id}
-              report={report}
-              placeName={placeNames[report.id] ?? 'Finding the place…'}
-              onViewDetails={() => setSelectedReport(report)}
-            />
-          ))
+          reports.map((report) => {
+            const withdrawal = removedReports.find(
+              (item) => item.reportId === report.id
+            );
+
+            return (
+              <ReportCard
+                key={report.id}
+                report={withdrawal ? { ...report, status: 'removed' } : report}
+                placeName={placeNames[report.id] ?? 'Finding the place…'}
+                withdrawalReason={withdrawal?.reason ?? null}
+                onViewDetails={() =>
+                  router.push(
+                    `/report-details?reportId=${encodeURIComponent(report.id)}` as Href
+                  )
+                }
+              />
+            );
+          })
         )}
       </ScrollView>
-
-      <ReportDetailsModal
-        report={selectedReport}
-        placeName={
-          selectedReport
-            ? placeNames[selectedReport.id] ?? 'Finding the place…'
-            : ''
-        }
-        onClose={() => setSelectedReport(null)}
-      />
     </SafeAreaView>
   );
 }
@@ -206,10 +205,12 @@ export default function MyReportsScreen() {
 function ReportCard({
   report,
   placeName,
+  withdrawalReason,
   onViewDetails,
 }: {
   report: Incident;
   placeName: string;
+  withdrawalReason: string | null;
   onViewDetails: () => void;
 }) {
   const colors = statusColors(report.status);
@@ -230,6 +231,9 @@ function ReportCard({
         {report.anonymous ? 'Anonymous' : 'Not anonymous'}
       </Text>
       <Text style={styles.meta}>{placeName}</Text>
+      {report.status === 'removed' && withdrawalReason ? (
+        <Text style={styles.meta}>Withdrawal reason: {withdrawalReason}</Text>
+      ) : null}
       <Pressable
         style={({ pressed }) => [styles.detailsButton, pressed && styles.pressed]}
         onPress={onViewDetails}
@@ -238,66 +242,6 @@ function ReportCard({
       >
         <Text style={styles.detailsButtonText}>View Details</Text>
       </Pressable>
-    </View>
-  );
-}
-
-function ReportDetailsModal({
-  report,
-  placeName,
-  onClose,
-}: {
-  report: Incident | null;
-  placeName: string;
-  onClose: () => void;
-}) {
-  return (
-    <Modal
-      visible={report !== null}
-      animationType="slide"
-      transparent
-      onRequestClose={onClose}
-    >
-      <View style={styles.modalBackdrop}>
-        <View style={styles.modalCard}>
-          {report ? (
-            <ScrollView showsVerticalScrollIndicator={false}>
-              <Text style={styles.modalTitle}>
-                {getIncidentCategoryLabel(report.type)}
-              </Text>
-              <Text style={styles.modalSummary}>
-                {report.anonymous
-                  ? 'You submitted this anonymously. Other people do not see your name.'
-                  : 'You did not submit this anonymously. Other people still do not see your name on the report.'}
-              </Text>
-              <Detail label="What you reported" value={readableDescription(report.description)} />
-              <Detail label="Where" value={placeName} />
-              <Detail
-                label="Report status"
-                value={`${statusLabel(report.status)}. ${statusExplanation(report.status)}`}
-              />
-              <Detail label="When you reported it" value={formatReportedAt(report)} />
-              <Pressable
-                style={({ pressed }) => [styles.closeButton, pressed && styles.pressed]}
-                onPress={onClose}
-                accessibilityRole="button"
-                accessibilityLabel="Close report details"
-              >
-                <Text style={styles.closeButtonText}>Close</Text>
-              </Pressable>
-            </ScrollView>
-          ) : null}
-        </View>
-      </View>
-    </Modal>
-  );
-}
-
-function Detail({ label, value }: { label: string; value: string }) {
-  return (
-    <View style={styles.detail}>
-      <Text style={styles.detailLabel}>{label}</Text>
-      <Text style={styles.detailValue}>{value}</Text>
     </View>
   );
 }
@@ -408,36 +352,5 @@ const styles = StyleSheet.create({
     backgroundColor: '#C43D74',
   },
   retryText: { color: '#FFFFFF', fontSize: 14, fontWeight: '800' },
-  modalBackdrop: {
-    flex: 1,
-    justifyContent: 'flex-end',
-    backgroundColor: 'rgba(57, 38, 49, 0.45)',
-  },
-  modalCard: {
-    maxHeight: '80%',
-    padding: 20,
-    borderTopLeftRadius: 24,
-    borderTopRightRadius: 24,
-    backgroundColor: '#FFF8FB',
-  },
-  modalTitle: { color: '#392631', fontSize: 22, fontWeight: '800' },
-  modalSummary: {
-    marginTop: 8,
-    color: '#755F6A',
-    fontSize: 14,
-    lineHeight: 21,
-  },
-  detail: { marginTop: 14 },
-  detailLabel: { color: '#9A8790', fontSize: 12, fontWeight: '800' },
-  detailValue: { marginTop: 4, color: '#392631', fontSize: 15, lineHeight: 22 },
-  closeButton: {
-    alignItems: 'center',
-    marginTop: 20,
-    marginBottom: 8,
-    paddingVertical: 14,
-    borderRadius: 14,
-    backgroundColor: '#C43D74',
-  },
-  closeButtonText: { color: '#FFFFFF', fontSize: 16, fontWeight: '800' },
   pressed: { opacity: 0.75 },
 });
