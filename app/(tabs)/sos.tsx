@@ -16,6 +16,7 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import SosHoldButton from '@/src/components/sos/SosHoldButton';
+import SosEmergencyMessage from '@/src/components/sos/SosEmergencyMessage';
 import { firestore } from '@/src/config/firebase';
 import { useAuth } from '@/src/context/AuthContext';
 import {
@@ -337,8 +338,8 @@ export default function SosScreen() {
             ) : null}
 
             <Text style={styles.small}>
-              These details are held in this screen only. No message has
-              been sent and no SOS record has been saved yet.
+              These details are held in this screen only. SafeHer does not
+              automatically send messages. No SOS record has been saved yet.
             </Text>
           </View>
         )}
@@ -362,6 +363,13 @@ export default function SosScreen() {
             <Text style={styles.actionText}>Check availability</Text>
           </Pressable>
         </View>
+
+        {activation && (
+          <SosEmergencyMessage
+            activation={activation}
+            isRetrievingLocation={isRetrievingLocation}
+          />
+        )}
 
         <View style={styles.card}>
           <Text style={styles.cardTitle}>Trusted contacts</Text>
