@@ -33,6 +33,42 @@ function getContactsCollection(uid: string) {
   return collection(firestore, 'users', uid, 'trustedContacts');
 }
 
+export function normalizePhoneNumber(phoneNumber: string): string {
+  return phoneNumber.replace(/\D/g, '');
+}
+
+function validateTrustedContact(input: TrustedContactInput): void {
+  if (!input.name.trim()) {
+    throw new Error('Please enter the contact name.');
+  }
+
+  if (!input.relationship.trim()) {
+    throw new Error('Please select a relationship.');
+  }
+
+  const phoneNumber = input.phoneNumber.trim();
+  const digitsOnly = normalizePhoneNumber(phoneNumber);
+
+  if (
+    !phoneNumber ||
+    !/^\+?[0-9\s().-]+$/.test(phoneNumber) ||
+    digitsOnly.length < 7 ||
+    digitsOnly.length > 15 ||
+    (phoneNumber.match(/\+/g) ?? []).length > 1 ||
+    (phoneNumber.includes('+') && !phoneNumber.startsWith('+'))
+  ) {
+    throw new Error(
+      'Enter a valid phone number containing 7 to 15 digits.'
+    );
+  }
+
+  const email = input.email?.trim() ?? '';
+
+  if (email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+    throw new Error('Please enter a valid email address.');
+  }
+}
+
 export function subscribeToTrustedContacts(
   uid: string,
   onContactsChanged: (contacts: TrustedContact[]) => void,
@@ -65,8 +101,31 @@ export async function saveTrustedContact(
   contactId: string | null,
   input: TrustedContactInput
 ): Promise<void> {
+  validateTrustedContact(input);
+
   const contactsCollection = getContactsCollection(uid);
   const existingContacts = await getDocs(contactsCollection);
+  const normalizedPhone = normalizePhoneNumber(input.phoneNumber);
+
+  const duplicateContact = existingContacts.docs.find(contactDocument => {
+    if (contactDocument.id === contactId) {
+      return false;
+    }
+
+    const existingPhone = contactDocument.data().phoneNumber;
+
+    return (
+      typeof existingPhone === 'string' &&
+      normalizePhoneNumber(existingPhone) === normalizedPhone
+    );
+  });
+
+  if (duplicateContact) {
+    throw new Error(
+      'This phone number is already saved for another trusted contact. Please use a different number.'
+    );
+  }
+
   const batch = writeBatch(firestore);
   const email = input.email?.trim() ?? '';
 
@@ -82,9 +141,9 @@ export async function saveTrustedContact(
   }
 
   const contactData = {
-    name: input.name,
-    relationship: input.relationship,
-    phoneNumber: input.phoneNumber,
+    name: input.name.trim(),
+    relationship: input.relationship.trim(),
+    phoneNumber: input.phoneNumber.trim(),
     email,
     isPrimary: input.isPrimary,
     updatedAt: serverTimestamp(),
