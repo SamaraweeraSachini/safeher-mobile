@@ -1,6 +1,5 @@
 import { Ionicons } from '@expo/vector-icons';
-import * as Location from 'expo-location';
-import { useRouter } from 'expo-router';
+import { useFocusEffect, useRouter } from 'expo-router';
 import { collection, getDocs } from 'firebase/firestore';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import {
@@ -15,8 +14,8 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
-import SosHoldButton from '@/src/components/sos/SosHoldButton';
 import SosEmergencyMessage from '@/src/components/sos/SosEmergencyMessage';
+import SosHoldButton from '@/src/components/sos/SosHoldButton';
 import { firestore } from '@/src/config/firebase';
 import { useAuth } from '@/src/context/AuthContext';
 import {
@@ -25,97 +24,122 @@ import {
   type PreparedSos,
   type SosTrustedContact,
 } from '@/src/services/sos-preparation-service';
+import {
+  getActiveSosRequest,
+  saveActiveSosRequest,
+  updateActiveSosLocation,
+  type ActiveSosRequest,
+} from '@/src/services/sos-request-service';
 
-type LocationStatus =
-  | 'checking'
-  | 'available'
-  | 'permission-needed'
-  | 'unavailable';
-
-const locationMessages: Record<LocationStatus, string> = {
-  checking: 'Checking location availability...',
-  available:
-    'Location permission is available. Your coordinates will be retrieved after you confirm SOS.',
-  'permission-needed':
-    'Location permission is needed to include your position. Emergency calling remains available.',
-  unavailable:
-    'Location is unavailable right now. Emergency calling remains available.',
+type ContentProps = {
+  userId: string | null;
+  registered: boolean;
+  authLoading: boolean;
 };
 
 export default function SosScreen() {
-  const router = useRouter();
-  const { user, loading: authLoading } = useAuth();
-  const userId = user?.uid ?? null;
+  const { user, loading } = useAuth();
 
-  const [locationStatus, setLocationStatus] =
-    useState<LocationStatus>('checking');
+  return (
+    <SosContent
+      key={user?.uid ?? 'signed-out'}
+      userId={user?.uid ?? null}
+      registered={Boolean(user && !user.isAnonymous)}
+      authLoading={loading}
+    />
+  );
+}
+
+function SosContent({
+  userId,
+  registered,
+  authLoading,
+}: ContentProps) {
+  const router = useRouter();
+
   const [contacts, setContacts] = useState<SosTrustedContact[]>([]);
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
   const [contactsLoading, setContactsLoading] = useState(false);
   const [contactsError, setContactsError] = useState<string | null>(null);
-  const [refresh, setRefresh] = useState(0);
-  const [activation, setActivation] = useState<PreparedSos | null>(null);
-  const [isRetrievingLocation, setIsRetrievingLocation] = useState(false);
+  const [contactsRefresh, setContactsRefresh] = useState(0);
 
-  const operation = useRef(0);
-  const locationBusy = useRef(false);
-  const activationStarted = useRef(false);
+  const [request, setRequest] = useState<ActiveSosRequest | null>(null);
+  const [preparation, setPreparation] = useState<PreparedSos | null>(null);
+  const [loadingRequest, setLoadingRequest] = useState(true);
+  const [loadError, setLoadError] = useState<string | null>(null);
+  const [actionError, setActionError] = useState<string | null>(null);
+  const [actionMessage, setActionMessage] = useState<string | null>(null);
+  const [busyLabel, setBusyLabel] = useState<string | null>(null);
 
-  // Invalidate pending location work when the account changes or screen closes.
-  useEffect(() => {
-    operation.current += 1;
-    locationBusy.current = false;
-    activationStarted.current = false;
+  const epoch = useRef(0);
+  const busy = useRef(false);
 
-    setActivation(null);
-    setIsRetrievingLocation(false);
-    setSelectedIds([]);
+  const loadRequest = useCallback(async () => {
+    if (busy.current) return;
 
-    return () => {
-      operation.current += 1;
-    };
-  }, [userId]);
+    if (authLoading) {
+      setLoadingRequest(true);
+      return;
+    }
 
-  const checkLocation = useCallback(async () => {
-    setLocationStatus('checking');
+    if (!registered || !userId) {
+      setLoadingRequest(false);
+      setLoadError(null);
+      return;
+    }
+
+    const token = ++epoch.current;
+
+    setLoadingRequest(true);
+    setLoadError(null);
 
     try {
-      const enabled = await Location.hasServicesEnabledAsync();
+      const saved = await getActiveSosRequest(userId);
 
-      if (!enabled) {
-        setLocationStatus('unavailable');
-        return;
+      if (epoch.current !== token) return;
+
+      setRequest(saved);
+
+      if (saved) {
+        setPreparation(saved.preparation);
+        setActionError(null);
       }
-
-      const permission = await Location.getForegroundPermissionsAsync();
-
-      setLocationStatus(
-        permission.granted ? 'available' : 'permission-needed',
-      );
     } catch {
-      setLocationStatus('unavailable');
-    }
-  }, []);
+      if (epoch.current !== token) return;
 
-  useEffect(() => {
-    void checkLocation();
-  }, [checkLocation]);
+      setLoadError(
+        'Could not check your active SOS request. Check your connection and retry. Sharing and emergency calling remain available.',
+      );
+    } finally {
+      if (epoch.current === token) {
+        setLoadingRequest(false);
+      }
+    }
+  }, [authLoading, registered, userId]);
+
+  useFocusEffect(
+    useCallback(() => {
+      void loadRequest();
+
+      return () => {
+        epoch.current += 1;
+      };
+    }, [loadRequest]),
+  );
 
   useEffect(() => {
     let active = true;
 
-    setContacts([]);
-    setSelectedIds([]);
-    setContactsError(null);
-
-    if (authLoading || !user || user.isAnonymous) {
+    if (authLoading || !registered || !userId) {
+      setContacts([]);
       setContactsLoading(false);
       return;
     }
 
     setContactsLoading(true);
+    setContactsError(null);
 
-    getDocs(collection(firestore, 'users', user.uid, 'trustedContacts'))
+    getDocs(collection(firestore, 'users', userId, 'trustedContacts'))
       .then((snapshot) => {
         if (!active) return;
 
@@ -141,11 +165,11 @@ export default function SosScreen() {
         setContacts(items);
       })
       .catch(() => {
-        if (!active) return;
-
-        setContactsError(
-          'Could not load trusted contacts. Check your connection and try again. Emergency calling remains available.',
-        );
+        if (active) {
+          setContactsError(
+            'Could not load contacts. You can continue without contacts or retry.',
+          );
+        }
       })
       .finally(() => {
         if (active) setContactsLoading(false);
@@ -154,333 +178,412 @@ export default function SosScreen() {
     return () => {
       active = false;
     };
-  }, [user, authLoading, refresh]);
+  }, [authLoading, registered, userId, contactsRefresh]);
 
-  const toggleContact = (id: string) => {
-    if (activationStarted.current) return;
+  const savePreparation = async (draft: PreparedSos) => {
+    if (!userId || !registered || busy.current) return;
 
-    setSelectedIds((current) =>
-      current.includes(id)
-        ? current.filter((selectedId) => selectedId !== id)
-        : [...current, id],
-    );
-  };
+    busy.current = true;
+    const token = epoch.current;
 
-  const loadActivationLocation = async () => {
-    if (locationBusy.current) return;
-
-    locationBusy.current = true;
-    setIsRetrievingLocation(true);
-
-    const currentOperation = ++operation.current;
+    setActionError(null);
+    setActionMessage(null);
+    setBusyLabel('Retrieving current location...');
 
     try {
-      const location = await retrieveSosLocation();
+      const complete: PreparedSos = draft.location
+        ? draft
+        : {
+            ...draft,
+            location: await retrieveSosLocation(),
+          };
 
-      if (operation.current !== currentOperation) return;
+      if (epoch.current !== token) return;
 
-      setActivation((current) =>
-        current ? { ...current, location } : current,
+      setPreparation(complete);
+      setBusyLabel('Saving simulation request to Firestore...');
+
+      const saved = await saveActiveSosRequest(userId, complete);
+
+      if (epoch.current !== token) return;
+
+      setRequest(saved);
+      setPreparation(saved.preparation);
+      setActionMessage('Active simulation request saved in Firestore.');
+    } catch {
+      if (epoch.current !== token) return;
+
+      setActionError(
+        'Could not confirm the SOS save. Your prepared details remain available here. Check your connection and retry saving or reload the request.',
       );
     } finally {
-      if (operation.current === currentOperation) {
-        locationBusy.current = false;
-        setIsRetrievingLocation(false);
+      busy.current = false;
+
+      if (epoch.current === token) {
+        setBusyLabel(null);
       }
     }
   };
 
-  const handleConfirmSos = () => {
-    if (activationStarted.current) return;
+  const handleConfirm = () => {
+    if (
+      busy.current ||
+      preparation ||
+      request ||
+      loadingRequest ||
+      loadError
+    ) {
+      return;
+    }
 
-    activationStarted.current = true;
-
-    const selectedContacts = contacts.filter((contact) =>
+    const selected = contacts.filter((contact) =>
       selectedIds.includes(contact.id),
     );
 
-    // Capture the confirmation time before requesting permission or GPS.
-    setActivation(createSosPreparation(selectedContacts));
+    const draft = createSosPreparation(selected);
 
-    void loadActivationLocation();
+    setPreparation(draft);
+    void savePreparation(draft);
   };
 
-  const openMaps = async (url: string) => {
+  const handleUpdateLocation = async () => {
+    if (!request || !userId || busy.current) return;
+
+    busy.current = true;
+    const token = epoch.current;
+
+    setActionError(null);
+    setActionMessage(null);
+    setBusyLabel('Retrieving updated location...');
+
+    try {
+      const location = await retrieveSosLocation();
+
+      if (epoch.current !== token) return;
+
+      if (!location.coordinates) {
+        setActionError(
+          `${location.message} Your previously saved location has been retained.`,
+        );
+        return;
+      }
+
+      setBusyLabel('Saving updated location...');
+
+      const updated = await updateActiveSosLocation(userId, location);
+
+      if (epoch.current !== token) return;
+
+      setRequest(updated);
+      setPreparation(updated.preparation);
+      setActionMessage(
+        'Location updated in Firestore. The original activation time is unchanged.',
+      );
+    } catch {
+      if (epoch.current !== token) return;
+
+      setActionError(
+        'Could not confirm the location update. The previously displayed location is retained. Reload the request to check its saved state.',
+      );
+    } finally {
+      busy.current = false;
+
+      if (epoch.current === token) {
+        setBusyLabel(null);
+      }
+    }
+  };
+
+  const openLink = async (url: string) => {
     try {
       await Linking.openURL(url);
     } catch {
       Alert.alert(
-        'Could not open Maps',
-        'Use the coordinates shown on this screen instead.',
+        'Could not open this action',
+        url.startsWith('tel:')
+          ? 'Open your phone dialer manually and enter 119.'
+          : 'Use the location coordinates displayed on this screen.',
       );
     }
   };
 
-  const openPoliceDialer = async () => {
-    try {
-      await Linking.openURL('tel:119');
-    } catch {
-      Alert.alert(
-        'Could not open the phone dialer',
-        'Open your phone dialer manually and enter 119 for Sri Lanka Police emergency assistance.',
-      );
-    }
-  };
+  const canSelectContacts =
+    !preparation && !request && !busyLabel && !loadingRequest && !loadError;
 
   return (
     <SafeAreaView style={styles.safeArea} edges={['top']}>
       <ScrollView contentContainerStyle={styles.content}>
         <Pressable
-          style={styles.back}
+          style={styles.action}
           onPress={() => {
-            if (router.canGoBack()) {
-              router.back();
-            } else {
-              router.replace('/');
-            }
+            if (router.canGoBack()) router.back();
+            else router.replace('/');
           }}
           accessibilityRole="button"
-          accessibilityLabel="Go back"
         >
-          <Ionicons name="arrow-back" size={22} color="#5A3D4D" />
-          <Text style={styles.backText}>Back</Text>
+          <Text style={styles.actionText}>Back</Text>
         </Pressable>
 
         <Text style={styles.title}>SOS assistance</Text>
 
         <Text style={styles.body}>
-          Select trusted contacts, then hold SOS and confirm. If you are
-          in immediate danger, contact emergency services directly.
+          SafeHer records a prototype simulation request. It does not
+          automatically notify contacts or emergency services.
         </Text>
 
-        <View style={styles.hero}>
-          <SosHoldButton
-            key={userId ?? 'guest'}
-            onConfirm={handleConfirmSos}
-          />
-        </View>
-
-        {activation && (
+        {loadingRequest ? (
           <View style={styles.card}>
-            <Text style={styles.cardTitle}>Prototype SOS details</Text>
-
-            <Text selectable style={styles.body}>
-              Activated: {new Date(activation.activatedAt).toLocaleString()}
+            <ActivityIndicator color="#A92F61" />
+            <Text style={styles.body}>Checking active SOS request...</Text>
+          </View>
+        ) : loadError ? (
+          <View style={styles.card}>
+            <Text style={styles.error}>{loadError}</Text>
+            <Pressable
+              style={styles.action}
+              onPress={() => void loadRequest()}
+              accessibilityRole="button"
+            >
+              <Text style={styles.actionText}>Retry loading SOS</Text>
+            </Pressable>
+          </View>
+        ) : !registered ? (
+          <View style={styles.card}>
+            <Text style={styles.body}>
+              Sign in with a registered account to save a prototype SOS
+              request. Emergency calling remains available.
             </Text>
+          </View>
+        ) : !preparation && !request ? (
+          <View style={styles.hero}>
+            <SosHoldButton onConfirm={handleConfirm} />
+          </View>
+        ) : null}
 
-            <Text selectable style={styles.small}>
-              Recorded time: {activation.activatedAt}
+        {preparation && (
+          <View style={styles.card}>
+            <Text style={styles.cardTitle}>
+              {request
+                ? 'Active SOS - simulation'
+                : 'SOS preparation - save not confirmed'}
             </Text>
 
             <Text style={styles.body}>
-              Selected contacts:{' '}
-              {activation.selectedContacts.length > 0
-                ? activation.selectedContacts
-                    .map((contact) => contact.name)
-                    .join(', ')
-                : 'None'}
+              {request
+                ? 'Status: active. This simulation request is saved in Firestore.'
+                : 'These details are prepared locally. An active Firestore save has not been confirmed.'}
             </Text>
 
-            {isRetrievingLocation ? (
-              <View style={styles.loadingRow}>
-                <ActivityIndicator color="#C43D74" />
-                <Text style={styles.body}>
-                  Retrieving current location...
+            <Text selectable style={styles.body}>
+              Activated: {new Date(preparation.activatedAt).toLocaleString()}
+            </Text>
+
+            <Text selectable style={styles.small}>
+              Recorded time: {preparation.activatedAt}
+            </Text>
+
+            <Text style={styles.cardTitle}>Selected contacts</Text>
+
+            {preparation.selectedContacts.length === 0 ? (
+              <Text style={styles.body}>None selected.</Text>
+            ) : (
+              preparation.selectedContacts.map((contact) => (
+                <Text key={contact.id} style={styles.body}>
+                  {contact.name}
+                  {contact.relationship ? ` - ${contact.relationship}` : ''}
+                  {'\n'}
+                  {contact.phoneNumber || 'No phone number saved'}
                 </Text>
-              </View>
-            ) : activation.location ? (
+              ))
+            )}
+
+            <Text style={styles.cardTitle}>Saved location</Text>
+
+            <Text style={styles.body}>
+              {preparation.location?.message ??
+                'Waiting for the location result...'}
+            </Text>
+
+            {preparation.location?.coordinates && (
+              <Text selectable style={styles.body}>
+                Latitude: {preparation.location.coordinates.latitude}
+                {'\n'}
+                Longitude: {preparation.location.coordinates.longitude}
+              </Text>
+            )}
+
+            {preparation.location?.mapsLink && (
               <>
-                <Text style={styles.body}>
-                  {activation.location.message}
+                <Text selectable style={styles.small}>
+                  {preparation.location.mapsLink}
                 </Text>
 
-                {activation.location.coordinates && (
-                  <Text selectable style={styles.body}>
-                    Latitude: {activation.location.coordinates.latitude}
-                    {'\n'}
-                    Longitude: {activation.location.coordinates.longitude}
+                <Pressable
+                  style={styles.action}
+                  onPress={() => {
+                    const link = preparation.location?.mapsLink;
+                    if (link) void openLink(link);
+                  }}
+                  accessibilityRole="button"
+                >
+                  <Text style={styles.actionText}>
+                    Open location in Google Maps
                   </Text>
-                )}
-
-                {activation.location.mapsLink && (
-                  <>
-                    <Text selectable style={styles.small}>
-                      {activation.location.mapsLink}
-                    </Text>
-
-                    <Pressable
-                      style={styles.action}
-                      onPress={() => {
-                        const link = activation.location?.mapsLink;
-                        if (link) void openMaps(link);
-                      }}
-                      accessibilityRole="button"
-                    >
-                      <Text style={styles.actionText}>
-                        Open location in Google Maps
-                      </Text>
-                    </Pressable>
-                  </>
-                )}
-
-                {!activation.location.coordinates && (
-                  <Pressable
-                    style={styles.action}
-                    onPress={() => void loadActivationLocation()}
-                    accessibilityRole="button"
-                  >
-                    <Text style={styles.actionText}>
-                      Retry location
-                    </Text>
-                  </Pressable>
-                )}
+                </Pressable>
               </>
+            )}
+
+            {busyLabel ? (
+              <View style={styles.loadingRow}>
+                <ActivityIndicator color="#A92F61" />
+                <Text style={styles.body}>{busyLabel}</Text>
+              </View>
+            ) : request ? (
+              <Pressable
+                style={styles.button}
+                onPress={() => void handleUpdateLocation()}
+                accessibilityRole="button"
+              >
+                <Text style={styles.buttonText}>Update Location</Text>
+              </Pressable>
+            ) : (
+              <Pressable
+                style={styles.button}
+                onPress={() => void savePreparation(preparation)}
+                accessibilityRole="button"
+              >
+                <Text style={styles.buttonText}>Retry saving SOS</Text>
+              </Pressable>
+            )}
+
+            {actionError ? (
+              <Text style={styles.error}>{actionError}</Text>
             ) : null}
 
+            {actionMessage ? (
+              <Text style={styles.body}>{actionMessage}</Text>
+            ) : null}
+
+            <Pressable
+              style={styles.action}
+              onPress={() => void loadRequest()}
+              disabled={Boolean(busyLabel)}
+              accessibilityRole="button"
+              accessibilityState={{ disabled: Boolean(busyLabel) }}
+            >
+              <Text style={styles.actionText}>Reload saved request</Text>
+            </Pressable>
+
             <Text style={styles.small}>
-              These details are held in this screen only. SafeHer does not
-              automatically send messages. No SOS record has been saved yet.
+              Location is a snapshot, not live tracking. No message
+              delivery or emergency response is confirmed.
+            </Text>
+          </View>
+        )}
+
+        {preparation && (
+          <SosEmergencyMessage
+            activation={preparation}
+            isRetrievingLocation={Boolean(busyLabel)}
+          />
+        )}
+
+        {!preparation && !request && (
+          <View style={styles.card}>
+            <Text style={styles.cardTitle}>Trusted contacts</Text>
+
+            {contactsLoading ? (
+              <ActivityIndicator color="#A92F61" />
+            ) : contactsError ? (
+              <>
+                <Text style={styles.body}>{contactsError}</Text>
+                <Pressable
+                  style={styles.action}
+                  onPress={() => setContactsRefresh((current) => current + 1)}
+                  accessibilityRole="button"
+                >
+                  <Text style={styles.actionText}>Retry contacts</Text>
+                </Pressable>
+              </>
+            ) : contacts.length === 0 ? (
+              <Text style={styles.body}>
+                No saved contacts available. Contacts are optional;
+                emergency calling remains available.
+              </Text>
+            ) : (
+              contacts.map((contact) => {
+                const selected = selectedIds.includes(contact.id);
+
+                return (
+                  <Pressable
+                    key={contact.id}
+                    style={[
+                      styles.contact,
+                      selected && styles.selectedContact,
+                    ]}
+                    disabled={!canSelectContacts}
+                    onPress={() =>
+                      setSelectedIds((current) =>
+                        current.includes(contact.id)
+                          ? current.filter((id) => id !== contact.id)
+                          : [...current, contact.id],
+                      )
+                    }
+                    accessibilityRole="checkbox"
+                    accessibilityLabel={`Select ${contact.name}`}
+                    accessibilityState={{
+                      checked: selected,
+                      disabled: !canSelectContacts,
+                    }}
+                  >
+                    <Ionicons
+                      name={selected ? 'checkbox' : 'square-outline'}
+                      size={24}
+                      color="#A92F61"
+                    />
+                    <View style={styles.contactDetails}>
+                      <Text style={styles.body}>{contact.name}</Text>
+                      <Text style={styles.small}>
+                        {contact.relationship}
+                      </Text>
+                    </View>
+                  </Pressable>
+                );
+              })
+            )}
+
+            <Text style={styles.small}>
+              Current location will be requested after you hold SOS and
+              confirm. Denial does not block emergency calling.
             </Text>
           </View>
         )}
 
         <View style={styles.card}>
-          <Text style={styles.cardTitle}>Current location</Text>
-
-          <Text style={styles.body}>
-            {locationMessages[locationStatus]}
-          </Text>
-
-          {locationStatus === 'checking' && (
-            <ActivityIndicator color="#C43D74" />
-          )}
-
-          <Pressable
-            style={styles.action}
-            onPress={() => void checkLocation()}
-            accessibilityRole="button"
-          >
-            <Text style={styles.actionText}>Check availability</Text>
-          </Pressable>
-        </View>
-
-        {activation && (
-          <SosEmergencyMessage
-            activation={activation}
-            isRetrievingLocation={isRetrievingLocation}
-          />
-        )}
-
-        <View style={styles.card}>
-          <Text style={styles.cardTitle}>Trusted contacts</Text>
-
-          <Text style={styles.body}>
-            {activation
-              ? 'The selected contacts were captured when you confirmed SOS.'
-              : 'Select one or more contacts to include in your SOS preparation.'}
-          </Text>
-
-          {authLoading || contactsLoading ? (
-            <ActivityIndicator color="#C43D74" />
-          ) : contactsError ? (
-            <>
-              <Text style={styles.body}>{contactsError}</Text>
-
-              {!activation && (
-                <Pressable
-                  style={styles.action}
-                  onPress={() => setRefresh((current) => current + 1)}
-                  accessibilityRole="button"
-                >
-                  <Text style={styles.actionText}>Try again</Text>
-                </Pressable>
-              )}
-            </>
-          ) : !user || user.isAnonymous ? (
-            <Text style={styles.body}>
-              Sign in with a registered account to see saved contacts.
-              Emergency calling remains available.
-            </Text>
-          ) : contacts.length === 0 ? (
-            <Text style={styles.body}>
-              No trusted contacts have been added. You can still activate
-              the prototype and access emergency calling.
-            </Text>
-          ) : (
-            contacts.map((contact) => {
-              const selected = activation
-                ? activation.selectedContacts.some(
-                    (item) => item.id === contact.id,
-                  )
-                : selectedIds.includes(contact.id);
-
-              return (
-                <Pressable
-                  key={contact.id}
-                  style={[
-                    styles.contact,
-                    selected && styles.selectedContact,
-                  ]}
-                  onPress={() => toggleContact(contact.id)}
-                  disabled={activation !== null}
-                  accessibilityRole="checkbox"
-                  accessibilityLabel={`Select ${contact.name}`}
-                  accessibilityState={{
-                    checked: selected,
-                    disabled: activation !== null,
-                  }}
-                >
-                  <Ionicons
-                    name={selected ? 'checkbox' : 'square-outline'}
-                    size={24}
-                    color="#A92F61"
-                  />
-
-                  <View style={styles.contactDetails}>
-                    <Text style={styles.contactName}>{contact.name}</Text>
-
-                    {contact.relationship ? (
-                      <Text style={styles.small}>
-                        {contact.relationship}
-                      </Text>
-                    ) : null}
-
-                    <Text style={styles.small}>
-                      {contact.phoneNumber || 'No phone number saved'}
-                    </Text>
-                  </View>
-                </Pressable>
-              );
-            })
-          )}
-        </View>
-
-        <View style={styles.card}>
           <Text style={styles.cardTitle}>Emergency services</Text>
-
           <Text style={styles.body}>
-            Sri Lanka Police emergency assistance: 119. This action opens
-            your phone dialer and does not depend on location permission
-            or saved contacts.
+            Open the phone dialer for Sri Lanka Police emergency
+            assistance. Location, contacts, and Firestore access are
+            not required for this action.
           </Text>
 
           <Pressable
-            style={styles.callButton}
-            onPress={() => void openPoliceDialer()}
+            style={styles.button}
+            onPress={() => void openLink('tel:119')}
             accessibilityRole="button"
-            accessibilityLabel="Open phone dialer for Police 119"
+            accessibilityLabel="Open Police dialer for 119"
           >
-            <Ionicons name="call" size={20} color="#FFFFFF" />
-            <Text style={styles.callText}>Open Police dialer - 119</Text>
+            <Text style={styles.buttonText}>
+              Open Police dialer - 119
+            </Text>
           </Pressable>
         </View>
 
         <View style={styles.disclaimer}>
-          <Text style={styles.disclaimerText}>
-            SafeHer SOS is an academic prototype. Confirming SOS prepares
-            details on this screen; it does not automatically notify
-            trusted contacts or emergency services. Do not rely on
-            SafeHer as your only way to get help.
+          <Text style={styles.small}>
+            Academic prototype only. An active simulation record does
+            not mean that help has been dispatched or anyone has been
+            notified. Do not rely on SafeHer as your only way to get help.
           </Text>
         </View>
       </ScrollView>
@@ -497,17 +600,6 @@ const styles = StyleSheet.create({
     paddingHorizontal: 20,
     paddingBottom: 36,
     gap: 12,
-  },
-  back: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 7,
-    minHeight: 44,
-  },
-  backText: {
-    color: '#5A3D4D',
-    fontSize: 15,
-    fontWeight: '700',
   },
   title: {
     color: '#32252B',
@@ -539,6 +631,11 @@ const styles = StyleSheet.create({
     fontSize: 12,
     lineHeight: 18,
   },
+  error: {
+    color: '#9E2637',
+    fontSize: 14,
+    lineHeight: 21,
+  },
   loadingRow: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -560,11 +657,6 @@ const styles = StyleSheet.create({
   contactDetails: {
     flex: 1,
   },
-  contactName: {
-    color: '#32252B',
-    fontSize: 15,
-    fontWeight: '700',
-  },
   action: {
     alignSelf: 'flex-start',
     minHeight: 44,
@@ -576,17 +668,15 @@ const styles = StyleSheet.create({
     fontSize: 14,
     fontWeight: '700',
   },
-  callButton: {
+  button: {
     minHeight: 48,
     padding: 12,
-    flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    gap: 10,
     borderRadius: 12,
     backgroundColor: '#A92F61',
   },
-  callText: {
+  buttonText: {
     color: '#FFFFFF',
     fontSize: 14,
     fontWeight: '700',
@@ -595,10 +685,5 @@ const styles = StyleSheet.create({
     padding: 16,
     borderRadius: 14,
     backgroundColor: '#FFF3D6',
-  },
-  disclaimerText: {
-    color: '#5D4B53',
-    fontSize: 12,
-    lineHeight: 18,
   },
 });
