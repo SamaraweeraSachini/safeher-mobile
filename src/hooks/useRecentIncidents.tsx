@@ -8,7 +8,10 @@ import { useAuth } from '@/src/context/AuthContext';
 import {
   subscribeToActiveIncidents,
 } from '@/src/services/incident-service';
-import { subscribeToRemovedReportIds } from '@/src/services/report-withdrawal-service';
+import {
+  ensureWithdrawalNotices,
+  subscribeToRemovedReportIds,
+} from '@/src/services/report-withdrawal-service';
 
 import type {
   Incident,
@@ -70,6 +73,14 @@ export function useActiveIncidents() {
 
     return subscribeToRemovedReportIds(user.uid, setRemovedReportIds);
   }, [isRegisteredUser, user]);
+
+  useEffect(() => {
+    if (!isRegisteredUser || !user || removedReportIds.length === 0) {
+      return;
+    }
+
+    void ensureWithdrawalNotices(user.uid, removedReportIds);
+  }, [isRegisteredUser, removedReportIds, user]);
 
   useEffect(() => {
     let listenerIsActive = true;

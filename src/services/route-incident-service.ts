@@ -7,8 +7,8 @@ import {
 
 import { firestore } from '@/src/config/firebase';
 import {
-  convertIncidentDocument,
   IncidentRetrievalError,
+  visibleActiveIncidents,
 } from '@/src/services/incident-service';
 import type { Incident } from '@/src/types/incident';
 
@@ -29,23 +29,13 @@ export async function getIncidentsForRouteScoring(): Promise<Incident[]> {
 
     // Request server data so route scores use the current incident records.
     const snapshot = await getDocsFromServer(activeIncidentsQuery);
-    const incidentsById = new Map<string, Incident>();
 
-    for (const documentSnapshot of snapshot.docs) {
-      const incident = convertIncidentDocument(
-        documentSnapshot.id,
-        documentSnapshot.data()
-      );
-
-      // A missing timestamp cannot be evaluated against the age rules.
-      if (!incident?.createdAt) {
-        continue;
-      }
-
-      incidentsById.set(incident.id, incident);
-    }
-
-    return Array.from(incidentsById.values());
+    return visibleActiveIncidents(
+      snapshot.docs.map((documentSnapshot) => ({
+        id: documentSnapshot.id,
+        data: documentSnapshot.data(),
+      }))
+    ).filter((incident) => incident.createdAt);
   } catch (error) {
     console.error('Route-scoring incident retrieval failed:', error);
 

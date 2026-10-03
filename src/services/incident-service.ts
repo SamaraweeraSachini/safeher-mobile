@@ -26,6 +26,38 @@ import type {
 } from '@/src/types/incident';
 
 const ACTIVE_INCIDENT_LIMIT = 50;
+const WITHDRAWAL_NOTICE_PREFIX = 'safeher-withdrawn:';
+
+export function withdrawnReportId(
+  data: Record<string, unknown>
+): string | null {
+  const storedId = data.withdrawnIncidentId;
+
+  if (
+    data.recordType === 'withdrawal' &&
+    typeof storedId === 'string' &&
+    storedId.trim().length > 0
+  ) {
+    return storedId.trim();
+  }
+
+  if (
+    typeof data.description === 'string' &&
+    data.description.startsWith(WITHDRAWAL_NOTICE_PREFIX)
+  ) {
+    const reportId = data.description
+      .slice(WITHDRAWAL_NOTICE_PREFIX.length)
+      .trim();
+
+    return reportId.length > 0 ? reportId : null;
+  }
+
+  return null;
+}
+
+export function withdrawalNoticeDescription(reportId: string): string {
+  return `${WITHDRAWAL_NOTICE_PREFIX}${reportId}`;
+}
 
 let submissionInProgress = false;
 
@@ -330,33 +362,13 @@ export function subscribeToActiveIncidents(
       activeIncidentsQuery,
 
       snapshot => {
-        const convertedIncidents =
-          snapshot.docs
-            .map(
-              documentSnapshot =>
-                convertIncidentDocument(
-                  documentSnapshot.id,
-                  documentSnapshot.data()
-                )
-            )
-            .filter(
-              (
-                incident
-              ): incident is Incident =>
-                incident !== null
-            );
-
         const activeIncidents =
-          removeDuplicateIncidents(
-            convertedIncidents
-          )
-            .sort(
-              sortIncidentsByNewest
-            )
-            .slice(
-              0,
-              ACTIVE_INCIDENT_LIMIT
-            );
+          visibleActiveIncidents(
+            snapshot.docs.map((documentSnapshot) => ({
+              id: documentSnapshot.id,
+              data: documentSnapshot.data(),
+            }))
+          ).slice(0, ACTIVE_INCIDENT_LIMIT);
 
         onIncidentsChanged(
           activeIncidents
@@ -380,6 +392,36 @@ export function subscribeToActiveIncidents(
   return unsubscribe;
 }
 
+/**
+ * Active map incidents, excluding reports withdrawn for every user.
+ * Withdrawal notices stay in the active query so guests can hide those reports too.
+ */
+export function visibleActiveIncidents(
+  documents: { id: string; data: Record<string, unknown> }[]
+): Incident[] {
+  const removedIds = new Set<string>();
+  const incidents: Incident[] = [];
+
+  documents.forEach((document) => {
+    const withdrawnIncidentId = withdrawnReportId(document.data);
+
+    if (withdrawnIncidentId) {
+      removedIds.add(withdrawnIncidentId);
+      return;
+    }
+
+    const incident = convertIncidentDocument(document.id, document.data);
+
+    if (incident) {
+      incidents.push(incident);
+    }
+  });
+
+  return removeDuplicateIncidents(
+    incidents.filter((incident) => !removedIds.has(incident.id))
+  ).sort(sortIncidentsByNewest);
+}
+
 const REPORT_STATUSES: IncidentStatus[] = [
   'active',
   'under-review',
@@ -398,6 +440,10 @@ function convertUserReportDocument(
   id: string,
   data: Record<string, unknown>
 ): Incident | null {
+  if (withdrawnReportId(data)) {
+    return null;
+  }
+
   if (
     !id ||
     !isIncidentCategoryId(data.type) ||
