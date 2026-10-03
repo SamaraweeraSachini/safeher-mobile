@@ -1,10 +1,10 @@
-import { Ionicons } from '@expo/vector-icons';
-
 import { useFocusEffect, useRouter } from 'expo-router';
 
 import { collection, getDocs } from 'firebase/firestore';
 
 import { useCallback, useEffect, useRef, useState } from 'react';
+
+import SosLifecycleActions from '@/src/components/sos/SosLifecycleActions';
 
 import {
 
