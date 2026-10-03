@@ -128,6 +128,7 @@ function SosContent({
   const [actionMessage, setActionMessage] = useState<string | null>(null);
 
   const [busyLabel, setBusyLabel] = useState<string | null>(null);
+  const [closureMessage, setClosureMessage] = useState<string | null>(null);
 
   const epoch = useRef(0);
 
@@ -198,6 +199,12 @@ function SosContent({
     }
 
   }, [authLoading, registered, userId]);
+
+  useEffect(() => {
+    return () => {
+      epoch.current += 1;
+    };
+  }, []);
 
   useFocusEffect(
 
@@ -399,6 +406,8 @@ function SosContent({
 
     );
 
+    setClosureMessage(null);
+
     const draft = createSosPreparation(selected);
 
     setPreparation(draft);
@@ -439,9 +448,13 @@ function SosContent({
 
       }
 
-      setBusyLabel('Saving updated location...');
+      setBusyLabel("Saving updated location...");
 
-      const updated = await updateActiveSosLocation(userId, location);
+      const updated = await updateActiveSosLocation(
+        userId,
+        location,
+        request.preparation.activatedAt,
+      );
 
       if (epoch.current !== token) return;
 
@@ -534,6 +547,14 @@ function SosContent({
         </Pressable>
 
         <Text style={styles.title}>SOS assistance</Text>
+
+        {closureMessage && !request && (
+          <View style={styles.card}>
+            <Text accessibilityLiveRegion="polite" style={styles.body}>
+              {closureMessage}
+            </Text>
+          </View>
+        )}
 
         <Text style={styles.body}>
 
@@ -819,6 +840,38 @@ function SosContent({
 
           />
 
+        )}
+
+        {request && userId && (
+          <SosLifecycleActions
+            key={request.preparation.activatedAt}
+            userId={userId}
+            activatedAt={request.preparation.activatedAt}
+            disabled={Boolean(busyLabel) || loadingRequest}
+            onBusyChange={(isBusy) => {
+              busy.current = isBusy;
+              setBusyLabel(isBusy ? 'Updating SOS status...' : null);
+            }}
+            onClosed={(status) => {
+              epoch.current += 1;
+              busy.current = false;
+
+              setRequest(null);
+              setPreparation(null);
+              setSelectedIds([]);
+              setBusyLabel(null);
+              setActionError(null);
+              setActionMessage(null);
+              setLoadError(null);
+              setLoadingRequest(false);
+
+              setClosureMessage(
+                status === 'cancelled'
+                  ? 'Prototype SOS cancelled. The cancellation status and time were saved. No SOS request is active.'
+                  : 'Prototype SOS resolved. The resolution status and time were saved. No SOS request is active.',
+              );
+            }}
+          />
         )}
 
         {!preparation && !request && (
