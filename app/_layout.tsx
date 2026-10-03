@@ -6,6 +6,7 @@ import {
 
 import { Stack } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
+
 import {
   ActivityIndicator,
   StyleSheet,
@@ -13,10 +14,12 @@ import {
 } from 'react-native';
 
 import { useColorScheme } from '@/hooks/use-color-scheme';
+
 import {
   AuthProvider,
   useAuth,
 } from '@/src/context/AuthContext';
+
 import { PrivacyPreferencesProvider } from '@/src/context/PrivacyPreferencesContext';
 
 export const unstable_settings = {
@@ -28,6 +31,7 @@ function RootNavigator() {
 
   const {
     isAuthenticated,
+    isGuest,
     loading,
   } = useAuth();
 
@@ -57,15 +61,23 @@ function RootNavigator() {
       >
         <Stack.Screen name="splash" />
 
-        <Stack.Protected guard={!isAuthenticated}>
+        <Stack.Protected
+          guard={!isAuthenticated}
+        >
           <Stack.Screen name="welcome" />
 
           <Stack.Screen name="(onboarding)" />
+        </Stack.Protected>
 
+        <Stack.Protected
+          guard={!isAuthenticated || isGuest}
+        >
           <Stack.Screen name="(auth)" />
         </Stack.Protected>
 
-        <Stack.Protected guard={isAuthenticated}>
+        <Stack.Protected
+          guard={isAuthenticated}
+        >
           <Stack.Screen name="(tabs)" />
 
           <Stack.Screen name="route-summary" />

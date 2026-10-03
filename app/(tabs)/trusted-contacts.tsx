@@ -1,6 +1,6 @@
 import { Ionicons } from '@expo/vector-icons';
 
-import { useRouter } from 'expo-router';
+import { type Href, useRouter } from 'expo-router';
 
 import { useEffect, useState } from 'react';
 
@@ -255,7 +255,11 @@ export default function TrustedContactsScreen() {
   }
 
   async function handleSave() {
-    if (!user) {
+    if (!user || isGuest || !isRegisteredUser) {
+      Alert.alert(
+        'Account required',
+        'Please create a registered account to save trusted contacts.'
+      );
       return;
     }
 
@@ -378,10 +382,12 @@ export default function TrustedContactsScreen() {
 
   async function handleDelete(contactId: string) {
 
-    if (!user) {
-
+    if (!user || isGuest || !isRegisteredUser) {
+      Alert.alert(
+        'Account required',
+        'Please create a registered account to manage trusted contacts.'
+      );
       return;
-
     }
 
     try {
@@ -412,10 +418,12 @@ export default function TrustedContactsScreen() {
 
   async function handleMakePrimary(contact: TrustedContact) {
 
-    if (!user || contact.isPrimary) {
-
+    if (!user || isGuest || !isRegisteredUser || contact.isPrimary) {
+      Alert.alert(
+        'Account required',
+        'Please create a registered account to manage trusted contacts.'
+      );
       return;
-
     }
 
     try {
@@ -529,35 +537,32 @@ export default function TrustedContactsScreen() {
           </View>
 
           <Text style={styles.restrictedTitle}>
-
-            Registered account required
-
+            Create an account to save trusted contacts
           </Text>
 
           <Text style={styles.restrictedDescription}>
-
-            Trusted contacts are available to registered
-
-            SafeHer users. Please sign in with your account
-
-            to manage your trusted contacts.
-
+            Trusted contacts are available to registered SafeHer users.
+            Create an account to save your contacts permanently and use
+            them across Safe Journeys and emergencies.
           </Text>
 
           <Pressable
-
             style={styles.backButton}
-
-            onPress={() => router.back()}
-
+            onPress={() => router.push('/(auth)/register' as Href)}
+            accessibilityRole="button"
+            accessibilityLabel="Create an account"
           >
-
             <Text style={styles.backButtonText}>
-
-              Go Back
-
+              Create Account
             </Text>
+          </Pressable>
 
+          <Pressable
+            style={styles.guestBackButton}
+            onPress={() => router.back()}
+            accessibilityRole="button"
+          >
+            <Text style={styles.guestBackButtonText}>Go Back</Text>
           </Pressable>
 
         </View>
@@ -2173,6 +2178,24 @@ const styles = StyleSheet.create({
     color: COLORS.white,
 
     fontWeight: '800',
+
+  },
+
+  guestBackButton: {
+
+    marginTop: 14,
+
+    paddingVertical: 10,
+
+  },
+
+  guestBackButtonText: {
+
+    color: COLORS.primaryDark,
+
+    fontWeight: '700',
+
+    fontSize: 14,
 
   },
 
