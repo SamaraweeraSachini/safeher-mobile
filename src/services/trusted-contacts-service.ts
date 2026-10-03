@@ -185,3 +185,8 @@ export async function deleteTrustedContact(
 
   await deleteDoc(contactReference);
 }
+
+/**
+ * Updates an existing trusted contact or creates a new one.
+ * Validates contact information and maintains the primary contact setting.
+ */
