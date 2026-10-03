@@ -1,4 +1,6 @@
 import {
+  addDoc,
+  collection,
   doc,
   getDoc,
   onSnapshot,
@@ -12,10 +14,12 @@ import {
 import { FirebaseError } from 'firebase/app';
 
 import { firebaseAuth, firestore } from '@/src/config/firebase';
+import { withdrawalNoticeDescription } from '@/src/services/incident-service';
 
 import type { ReportWithdrawalRequest } from '@/src/types/report-withdrawal';
 
 const REQUESTS = 'reportWithdrawalRequests';
+const NOTICE_VERSION = 2;
 const MIN_REASON_LENGTH = 1;
 const MAX_REASON_LENGTH = 300;
 
@@ -167,29 +171,34 @@ export async function createReportWithdrawalRequest(
 
     const accountReference = userReference(currentUser.uid);
     const accountSnapshot = await getDoc(accountReference);
+    const savedWithdrawal = {
+      reportId: cleanedReportId,
+      requestedBy: currentUser.uid,
+      reason: cleanedReason,
+      status: 'removed' as const,
+      requestedAt: serverTimestamp(),
+    };
+    const requests = {
+      ...savedRequests(accountSnapshot.data()),
+      [cleanedReportId]: savedWithdrawal,
+    };
 
     await setDoc(
       accountReference,
       {
-        [REQUESTS]: {
-          ...savedRequests(accountSnapshot.data()),
-          [cleanedReportId]: {
-            reportId: cleanedReportId,
-            requestedBy: currentUser.uid,
-            reason: cleanedReason,
-            status: 'removed',
-            requestedAt: serverTimestamp(),
-          },
-        },
+        [REQUESTS]: requests,
       },
       { merge: true }
     );
 
-    if (incident.status !== 'removed') {
+    let removedForEveryone = incident.status === 'removed';
+
+    if (!removedForEveryone) {
       try {
         await updateDoc(doc(firestore, 'incidents', cleanedReportId), {
           status: 'removed',
         });
+        removedForEveryone = true;
       } catch (updateError) {
         if (
           !(updateError instanceof FirebaseError) ||
@@ -199,6 +208,29 @@ export async function createReportWithdrawalRequest(
         }
       }
     }
+
+    if (!removedForEveryone) {
+      await publishWithdrawalNotice(
+        currentUser.uid,
+        cleanedReportId,
+        incident
+      );
+    }
+
+    await setDoc(
+      accountReference,
+      {
+        [REQUESTS]: {
+          ...requests,
+          [cleanedReportId]: {
+            ...savedWithdrawal,
+            mapHidden: true,
+            mapNoticeVersion: NOTICE_VERSION,
+          },
+        },
+      },
+      { merge: true }
+    );
   } catch (error) {
     if (error instanceof WithdrawalRequestError) {
       throw error;
@@ -207,6 +239,86 @@ export async function createReportWithdrawalRequest(
     throw new WithdrawalRequestError(
       'This report could not be removed. Check your connection and try again.'
     );
+  }
+}
+
+async function publishWithdrawalNotice(
+  userId: string,
+  reportId: string,
+  incident: Record<string, unknown>
+): Promise<void> {
+  await addDoc(collection(firestore, 'incidents'), {
+    type: typeof incident.type === 'string' ? incident.type : 'other',
+    description: withdrawalNoticeDescription(reportId),
+    coordinates: incident.coordinates,
+    anonymous: true,
+    status: 'active',
+    creatorUid: userId,
+    createdAt: serverTimestamp(),
+  });
+}
+
+const publishedNoticeIds = new Set<string>();
+
+/** Publishes map removals that were saved before every user could see them. */
+export async function ensureWithdrawalNotices(
+  userId: string,
+  reportIds: string[]
+): Promise<void> {
+  const pendingIds = reportIds.filter((reportId) => !publishedNoticeIds.has(reportId));
+
+  if (pendingIds.length === 0) {
+    return;
+  }
+
+  pendingIds.forEach((reportId) => publishedNoticeIds.add(reportId));
+
+  try {
+    const accountReference = userReference(userId);
+    const accountSnapshot = await getDoc(accountReference);
+    const requests = savedRequests(accountSnapshot.data());
+    let changed = false;
+
+    for (const reportId of pendingIds) {
+      const current = requests[reportId];
+
+      if (!current || typeof current !== 'object') {
+        continue;
+      }
+
+      const record = current as {
+        mapHidden?: unknown;
+        mapNoticeVersion?: unknown;
+      };
+
+      if (record.mapHidden === true && record.mapNoticeVersion === NOTICE_VERSION) {
+        continue;
+      }
+
+      const incidentSnapshot = await getDoc(doc(firestore, 'incidents', reportId));
+      const incident = incidentSnapshot.data();
+
+      if (incident && incident.status !== 'removed') {
+        await publishWithdrawalNotice(userId, reportId, incident);
+      }
+
+      requests[reportId] = {
+        ...record,
+        mapHidden: true,
+        mapNoticeVersion: NOTICE_VERSION,
+      };
+      changed = true;
+    }
+
+    if (changed) {
+      await setDoc(
+        accountReference,
+        { [REQUESTS]: requests },
+        { merge: true }
+      );
+    }
+  } catch {
+    pendingIds.forEach((reportId) => publishedNoticeIds.delete(reportId));
   }
 }
 

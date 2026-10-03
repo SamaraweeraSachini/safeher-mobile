@@ -307,6 +307,15 @@ export default function ProfileScreen() {
               description="Read guidance for responsible incident reporting"
               onPress={() => router.push('/reporting-guidelines')}
             />
+
+            <View style={styles.divider} />
+
+            <OptionRow
+              icon="medkit-outline"
+              title="Safety resources"
+              description="Emergency numbers and what to do in an unsafe situation"
+              onPress={() => router.push('/safety-resources' as Href)}
+            />
           </View>
         </View>
 
