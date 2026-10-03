@@ -1,13 +1,10 @@
-
 import {
-  addDoc,
   collection,
   deleteDoc,
   doc,
   getDocs,
   onSnapshot,
   serverTimestamp,
-  updateDoc,
   writeBatch,
 } from 'firebase/firestore';
 
@@ -18,6 +15,7 @@ export type TrustedContact = {
   name: string;
   relationship: string;
   phoneNumber: string;
+  email?: string;
   isPrimary: boolean;
   createdAt?: unknown;
   updatedAt?: unknown;
@@ -27,16 +25,12 @@ export type TrustedContactInput = {
   name: string;
   relationship: string;
   phoneNumber: string;
+  email?: string;
   isPrimary: boolean;
 };
 
 function getContactsCollection(uid: string) {
-  return collection(
-    firestore,
-    'users',
-    uid,
-    'trustedContacts'
-  );
+  return collection(firestore, 'users', uid, 'trustedContacts');
 }
 
 export function subscribeToTrustedContacts(
@@ -44,17 +38,13 @@ export function subscribeToTrustedContacts(
   onContactsChanged: (contacts: TrustedContact[]) => void,
   onError: (error: Error) => void
 ) {
-  const contactsQuery = getContactsCollection(uid);
-
   return onSnapshot(
-    contactsQuery,
+    getContactsCollection(uid),
     snapshot => {
-      const contacts = snapshot.docs.map(
-        contactDocument => ({
-          id: contactDocument.id,
-          ...contactDocument.data(),
-        } as TrustedContact)
-      );
+      const contacts = snapshot.docs.map(contactDocument => ({
+        id: contactDocument.id,
+        ...contactDocument.data(),
+      } as TrustedContact));
 
       contacts.sort((a, b) => {
         if (a.isPrimary !== b.isPrimary) {
@@ -76,11 +66,9 @@ export async function saveTrustedContact(
   input: TrustedContactInput
 ): Promise<void> {
   const contactsCollection = getContactsCollection(uid);
-  const existingContacts = await getDocs(
-    contactsCollection
-  );
-
+  const existingContacts = await getDocs(contactsCollection);
   const batch = writeBatch(firestore);
+  const email = input.email?.trim() ?? '';
 
   if (input.isPrimary) {
     existingContacts.docs.forEach(contactDocument => {
@@ -93,6 +81,15 @@ export async function saveTrustedContact(
     });
   }
 
+  const contactData = {
+    name: input.name,
+    relationship: input.relationship,
+    phoneNumber: input.phoneNumber,
+    email,
+    isPrimary: input.isPrimary,
+    updatedAt: serverTimestamp(),
+  };
+
   if (contactId) {
     const contactReference = doc(
       firestore,
@@ -102,25 +99,13 @@ export async function saveTrustedContact(
       contactId
     );
 
-    batch.update(contactReference, {
-      name: input.name,
-      relationship: input.relationship,
-      phoneNumber: input.phoneNumber,
-      isPrimary: input.isPrimary,
-      updatedAt: serverTimestamp(),
-    });
+    batch.update(contactReference, contactData);
   } else {
-    const newContactReference = doc(
-      contactsCollection
-    );
+    const newContactReference = doc(contactsCollection);
 
     batch.set(newContactReference, {
-      name: input.name,
-      relationship: input.relationship,
-      phoneNumber: input.phoneNumber,
-      isPrimary: input.isPrimary,
+      ...contactData,
       createdAt: serverTimestamp(),
-      updatedAt: serverTimestamp(),
     });
   }
 
