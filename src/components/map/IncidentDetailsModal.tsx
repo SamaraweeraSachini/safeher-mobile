@@ -1,5 +1,7 @@
 import { Ionicons } from '@expo/vector-icons';
+import { useRef } from 'react';
 import {
+    KeyboardAvoidingView,
     Modal,
     Pressable,
     ScrollView,
@@ -12,6 +14,7 @@ import {
     getIncidentCategory,
     getIncidentCategoryLabel,
 } from '@/constants/incident-categories';
+import ReportInappropriateContent from '@/src/components/map/ReportInappropriateContent';
 
 import type {
     Incident,
@@ -90,6 +93,8 @@ export default function IncidentDetailsModal({
   visible,
   onClose,
 }: IncidentDetailsModalProps) {
+  const scrollRef = useRef<ScrollView>(null);
+
   if (!incident) {
     return null;
   }
@@ -140,11 +145,14 @@ export default function IncidentDetailsModal({
           accessibilityLabel="Close incident details"
         />
 
-        <View style={styles.modalContainer}>
+        <KeyboardAvoidingView behavior="padding" style={styles.modalContainer}>
           <View style={styles.handle} />
 
           <ScrollView
+            ref={scrollRef}
             contentContainerStyle={styles.content}
+            automaticallyAdjustKeyboardInsets
+            keyboardShouldPersistTaps="handled"
             showsVerticalScrollIndicator={false}
           >
             <View style={styles.header}>
@@ -286,6 +294,15 @@ export default function IncidentDetailsModal({
               </View>
             </View>
 
+            <ReportInappropriateContent
+              incidentId={incident.id}
+              onExpand={() => {
+                setTimeout(() => {
+                  scrollRef.current?.scrollToEnd({ animated: true });
+                }, 250);
+              }}
+            />
+
             <Pressable
               style={({ pressed }) => [
                 styles.closeButton,
@@ -301,7 +318,7 @@ export default function IncidentDetailsModal({
               </Text>
             </Pressable>
           </ScrollView>
-        </View>
+        </KeyboardAvoidingView>
       </View>
     </Modal>
   );
