@@ -3,7 +3,11 @@ import {
   type Href,
   useRouter,
 } from 'expo-router';
-import { useMemo, useState } from 'react';
+import {
+  useEffect,
+  useMemo,
+  useState,
+} from 'react';
 import {
   ActivityIndicator,
   Alert,
@@ -16,9 +20,13 @@ import {
   TextInput,
   View,
 } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import {
+  SafeAreaView,
+} from 'react-native-safe-area-context';
 
-import { Brand } from '@/constants/brand';
+import {
+  Brand,
+} from '@/constants/brand';
 
 import {
   CHECK_IN_INTERVALS,
@@ -32,6 +40,11 @@ import {
 import {
   useLocationPermission,
 } from '@/src/hooks/useLocationPermission';
+
+import {
+  getLocationSuggestions,
+  type LocationSuggestion,
+} from '@/src/services/route-location-service';
 
 import {
   createSafeJourney,
@@ -81,17 +94,31 @@ function formatTime(
   });
 }
 
+function formatCoordinate(
+  value: number
+): string {
+  return Number.isFinite(value)
+    ? value.toFixed(5)
+    : 'Unavailable';
+}
+
 export default function JourneyScreen() {
   const router =
     useRouter();
 
   const {
     permissionState,
+    errorMessage:
+      permissionError,
+    retry:
+      retryPermission,
   } = useLocationPermission();
 
   const {
     location,
     isLocationLoading,
+    locationError,
+    retryLocation,
   } = useCurrentLocation(
     permissionState
   );
@@ -107,38 +134,155 @@ export default function JourneyScreen() {
   ] = useState('');
 
   const [
+    selectedDestination,
+    setSelectedDestination,
+  ] =
+    useState<LocationSuggestion | null>(
+      null
+    );
+
+  const [
+    destinationSuggestions,
+    setDestinationSuggestions,
+  ] =
+    useState<LocationSuggestion[]>([]);
+
+  const [
+    isSearchingDestination,
+    setIsSearchingDestination,
+  ] = useState(false);
+
+  const [
+    destinationSearchError,
+    setDestinationSearchError,
+  ] =
+    useState<string | null>(
+      null
+    );
+
+  const [
     arrivalMinutes,
     setArrivalMinutes,
-  ] = useState<number | null>(
-    null
-  );
+  ] =
+    useState<number | null>(
+      null
+    );
 
   const [
     selectedContactIds,
     setSelectedContactIds,
-  ] = useState<string[]>([]);
+  ] =
+    useState<string[]>([]);
 
   const [
     checkInInterval,
     setCheckInInterval,
-  ] = useState<CheckInInterval>(
-    30
-  );
+  ] =
+    useState<CheckInInterval>(
+      30
+    );
 
   const [
     shareJourney,
     setShareJourney,
-  ] = useState(true);
+  ] =
+    useState(true);
 
   const [
     contactsVisible,
     setContactsVisible,
-  ] = useState(false);
+  ] =
+    useState(false);
+
+  useEffect(() => {
+    if (
+      selectedDestination ||
+      destination.trim().length < 3
+    ) {
+      setDestinationSuggestions(
+        []
+      );
+
+      setIsSearchingDestination(
+        false
+      );
+
+      setDestinationSearchError(
+        null
+      );
+
+      return;
+    }
+
+    const controller =
+      new AbortController();
+
+    setIsSearchingDestination(
+      true
+    );
+
+    setDestinationSearchError(
+      null
+    );
+
+    const timer =
+      setTimeout(() => {
+        getLocationSuggestions(
+          destination,
+          controller.signal
+        )
+          .then(
+            suggestions => {
+              if (
+                !controller.signal
+                  .aborted
+              ) {
+                setDestinationSuggestions(
+                  suggestions
+                );
+              }
+            }
+          )
+          .catch(() => {
+            if (
+              !controller.signal
+                .aborted
+            ) {
+              setDestinationSearchError(
+                'Could not find locations. Check your connection and try typing again.'
+              );
+
+              setDestinationSuggestions(
+                []
+              );
+            }
+          })
+          .finally(() => {
+            if (
+              !controller.signal
+                .aborted
+            ) {
+              setIsSearchingDestination(
+                false
+              );
+            }
+          });
+      }, 400);
+
+    return () => {
+      clearTimeout(timer);
+      controller.abort();
+    };
+  }, [
+    destination,
+    selectedDestination,
+  ]);
 
   const expectedArrivalTime =
     useMemo(
       () =>
-        arrivalMinutes === null
+        arrivalMinutes ===
+        null
           ? null
           : createArrivalTime(
               arrivalMinutes
@@ -159,8 +303,8 @@ export default function JourneyScreen() {
     );
 
   const canStartJourney =
-    destination.trim().length >
-      0 &&
+    selectedDestination !==
+      null &&
     expectedArrivalTime !==
       null &&
     location !== null &&
@@ -170,6 +314,57 @@ export default function JourneyScreen() {
         0
     ) &&
     !isStartingJourney;
+
+  const handleDestinationChange =
+    (
+      value: string
+    ) => {
+      setDestination(
+        value
+      );
+
+      setSelectedDestination(
+        null
+      );
+
+      setDestinationSearchError(
+        null
+      );
+    };
+
+  const handleSelectDestination =
+    (
+      place: LocationSuggestion
+    ) => {
+      setSelectedDestination(
+        place
+      );
+
+      setDestination(
+        place.name
+      );
+
+      setDestinationSuggestions(
+        []
+      );
+
+      setDestinationSearchError(
+        null
+      );
+    };
+
+  const handleUseCurrentLocation =
+    async () => {
+      if (
+        permissionState !==
+        'granted'
+      ) {
+        await retryPermission();
+        return;
+      }
+
+      await retryLocation();
+    };
 
   const toggleContact = (
     contact: JourneyTrustedContact
@@ -199,7 +394,18 @@ export default function JourneyScreen() {
       ) {
         Alert.alert(
           'Destination required',
-          'Enter your destination before starting the journey.'
+          'Search for and select your destination before starting the journey.'
+        );
+
+        return;
+      }
+
+      if (
+        !selectedDestination
+      ) {
+        Alert.alert(
+          'Select destination',
+          'Please select a destination from the search suggestions.'
         );
 
         return;
@@ -210,7 +416,7 @@ export default function JourneyScreen() {
           'Current location required',
           isLocationLoading
             ? 'SafeHer is still getting your current location. Please wait a moment and try again.'
-            : 'SafeHer needs your current location before starting a Safe Journey.'
+            : 'Tap Use Current Location before starting your Safe Journey.'
         );
 
         return;
@@ -255,7 +461,15 @@ export default function JourneyScreen() {
       const configuration:
         SafeJourneyConfiguration = {
         destination:
-          destination.trim(),
+          selectedDestination.name,
+
+        destinationLocation: {
+          latitude:
+            selectedDestination.latitude,
+
+          longitude:
+            selectedDestination.longitude,
+        },
 
         currentLocation: {
           latitude:
@@ -334,7 +548,9 @@ export default function JourneyScreen() {
 
   return (
     <SafeAreaView
-      style={styles.safeArea}
+      style={
+        styles.safeArea
+      }
       edges={['top']}
     >
       <ScrollView
@@ -383,9 +599,9 @@ export default function JourneyScreen() {
                 styles.subtitle
               }
             >
-              Configure your journey and
-              check-in preferences before
-              you leave.
+              Choose a real destination
+              and configure your journey
+              safety preferences.
             </Text>
           </View>
         </View>
@@ -452,6 +668,156 @@ export default function JourneyScreen() {
               styles.sectionTitle
             }
           >
+            Starting location
+          </Text>
+
+          <View
+            style={
+              styles.locationCard
+            }
+          >
+            <View
+              style={
+                styles.locationCardTop
+              }
+            >
+              <View
+                style={
+                  styles.locationIcon
+                }
+              >
+                <Ionicons
+                  name="locate"
+                  size={20}
+                  color={
+                    Brand.burgundy
+                  }
+                />
+              </View>
+
+              <View
+                style={
+                  styles.locationTextContainer
+                }
+              >
+                <Text
+                  style={
+                    styles.locationTitle
+                  }
+                >
+                  Current Location
+                </Text>
+
+                {location ? (
+                  <Text
+                    style={
+                      styles.locationValue
+                    }
+                  >
+                    {formatCoordinate(
+                      location.latitude
+                    )}
+                    ,{' '}
+                    {formatCoordinate(
+                      location.longitude
+                    )}
+                  </Text>
+                ) : (
+                  <Text
+                    style={
+                      styles.locationValue
+                    }
+                  >
+                    Location not available
+                    yet
+                  </Text>
+                )}
+              </View>
+
+              {location ? (
+                <Ionicons
+                  name="checkmark-circle"
+                  size={22}
+                  color="#38785A"
+                />
+              ) : null}
+            </View>
+
+            <Pressable
+              style={
+                styles.currentLocationButton
+              }
+              onPress={
+                handleUseCurrentLocation
+              }
+              disabled={
+                isLocationLoading
+              }
+              accessibilityRole="button"
+              accessibilityLabel="Use current location"
+            >
+              {isLocationLoading ? (
+                <ActivityIndicator
+                  size="small"
+                  color={
+                    Brand.burgundy
+                  }
+                />
+              ) : (
+                <Ionicons
+                  name="navigate-circle-outline"
+                  size={20}
+                  color={
+                    Brand.burgundy
+                  }
+                />
+              )}
+
+              <Text
+                style={
+                  styles.currentLocationButtonText
+                }
+              >
+                {isLocationLoading
+                  ? 'Getting Location...'
+                  : location
+                    ? 'Refresh Current Location'
+                    : 'Use Current Location'}
+              </Text>
+            </Pressable>
+          </View>
+
+          {permissionError ? (
+            <Text
+              style={
+                styles.errorText
+              }
+            >
+              {permissionError}
+            </Text>
+          ) : null}
+
+          {locationError ? (
+            <Text
+              style={
+                styles.errorText
+              }
+            >
+              {locationError}
+            </Text>
+          ) : null}
+        </View>
+
+        <View
+          style={
+            styles.section
+          }
+        >
+          <Text
+            style={
+              styles.sectionTitle
+            }
+          >
             Destination
           </Text>
 
@@ -461,7 +827,7 @@ export default function JourneyScreen() {
             }
           >
             <Ionicons
-              name="location-outline"
+              name="search-outline"
               size={20}
               color={
                 Brand.burgundy
@@ -473,18 +839,176 @@ export default function JourneyScreen() {
                 destination
               }
               onChangeText={
-                setDestination
+                handleDestinationChange
               }
-              placeholder="Enter destination"
+              placeholder="Search destination"
               placeholderTextColor={
                 Brand.muted
               }
               style={
                 styles.input
               }
+              autoCorrect={false}
               accessibilityLabel="Journey destination"
             />
+
+            {destination.length >
+            0 ? (
+              <Pressable
+                onPress={() => {
+                  setDestination('');
+                  setSelectedDestination(
+                    null
+                  );
+                  setDestinationSuggestions(
+                    []
+                  );
+                }}
+                accessibilityRole="button"
+                accessibilityLabel="Clear destination"
+              >
+                <Ionicons
+                  name="close-circle"
+                  size={20}
+                  color={
+                    Brand.muted
+                  }
+                />
+              </Pressable>
+            ) : null}
           </View>
+
+          {isSearchingDestination ? (
+            <View
+              style={
+                styles.searchStatus
+              }
+            >
+              <ActivityIndicator
+                size="small"
+                color={
+                  Brand.burgundy
+                }
+              />
+
+              <Text
+                style={
+                  styles.searchStatusText
+                }
+              >
+                Searching locations...
+              </Text>
+            </View>
+          ) : null}
+
+          {destinationSearchError ? (
+            <Text
+              style={
+                styles.errorText
+              }
+            >
+              {destinationSearchError}
+            </Text>
+          ) : null}
+
+          {destinationSuggestions.length >
+          0 ? (
+            <View
+              style={
+                styles.suggestionsContainer
+              }
+            >
+              {destinationSuggestions.map(
+                place => (
+                  <Pressable
+                    key={
+                      place.id
+                    }
+                    style={
+                      styles.suggestionRow
+                    }
+                    onPress={() =>
+                      handleSelectDestination(
+                        place
+                      )
+                    }
+                    accessibilityRole="button"
+                    accessibilityLabel={`Select ${place.name} as destination`}
+                  >
+                    <View
+                      style={
+                        styles.suggestionIcon
+                      }
+                    >
+                      <Ionicons
+                        name="location-outline"
+                        size={18}
+                        color={
+                          Brand.burgundy
+                        }
+                      />
+                    </View>
+
+                    <Text
+                      style={
+                        styles.suggestionText
+                      }
+                    >
+                      {place.name}
+                    </Text>
+
+                    <Ionicons
+                      name="chevron-forward"
+                      size={17}
+                      color={
+                        Brand.muted
+                      }
+                    />
+                  </Pressable>
+                )
+              )}
+            </View>
+          ) : null}
+
+          {selectedDestination ? (
+            <View
+              style={
+                styles.selectedDestination
+              }
+            >
+              <Ionicons
+                name="checkmark-circle"
+                size={18}
+                color="#38785A"
+              />
+
+              <Text
+                style={
+                  styles.selectedDestinationText
+                }
+              >
+                Selected:{' '}
+                {
+                  selectedDestination.name
+                }
+              </Text>
+            </View>
+          ) : destination.trim().length >=
+            3 &&
+            !isSearchingDestination &&
+            destinationSuggestions.length ===
+              0 &&
+            !destinationSearchError ? (
+            <Text
+              style={
+                styles.helperText
+              }
+            >
+              Select a location from the
+              suggestions before starting
+              your journey.
+            </Text>
+          ) : null}
         </View>
 
         <View
@@ -1039,7 +1563,8 @@ const styles =
       width: 50,
       height: 50,
       alignItems: 'center',
-      justifyContent: 'center',
+      justifyContent:
+        'center',
       borderRadius: 16,
       backgroundColor:
         Brand.burgundy,
@@ -1115,6 +1640,70 @@ const styles =
       lineHeight: 17,
     },
 
+    locationCard: {
+      padding: 14,
+      borderWidth: 1,
+      borderColor:
+        Brand.line,
+      borderRadius: 16,
+      backgroundColor:
+        Brand.white,
+    },
+
+    locationCardTop: {
+      flexDirection: 'row',
+      alignItems: 'center',
+    },
+
+    locationIcon: {
+      width: 40,
+      height: 40,
+      alignItems: 'center',
+      justifyContent:
+        'center',
+      borderRadius: 20,
+      backgroundColor:
+        Brand.blush,
+    },
+
+    locationTextContainer: {
+      flex: 1,
+      marginLeft: 10,
+    },
+
+    locationTitle: {
+      color: Brand.ink,
+      fontSize: 14,
+      fontWeight: '800',
+    },
+
+    locationValue: {
+      marginTop: 3,
+      color: Brand.muted,
+      fontSize: 11,
+    },
+
+    currentLocationButton: {
+      minHeight: 43,
+      flexDirection: 'row',
+      alignItems: 'center',
+      justifyContent:
+        'center',
+      gap: 7,
+      marginTop: 13,
+      borderWidth: 1,
+      borderColor:
+        Brand.burgundy,
+      borderRadius: 12,
+    },
+
+    currentLocationButtonText: {
+      color:
+        Brand.burgundy,
+      fontSize: 12,
+      fontWeight: '800',
+    },
+
     inputContainer: {
       minHeight: 54,
       flexDirection: 'row',
@@ -1131,8 +1720,84 @@ const styles =
     input: {
       flex: 1,
       marginLeft: 9,
+      marginRight: 8,
       color: Brand.ink,
       fontSize: 15,
+    },
+
+    searchStatus: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 7,
+      marginTop: 9,
+    },
+
+    searchStatusText: {
+      color: Brand.muted,
+      fontSize: 11,
+    },
+
+    suggestionsContainer: {
+      marginTop: 7,
+      overflow: 'hidden',
+      borderWidth: 1,
+      borderColor:
+        Brand.line,
+      borderRadius: 14,
+      backgroundColor:
+        Brand.white,
+    },
+
+    suggestionRow: {
+      minHeight: 52,
+      flexDirection: 'row',
+      alignItems: 'center',
+      paddingHorizontal: 12,
+      borderBottomWidth:
+        StyleSheet.hairlineWidth,
+      borderBottomColor:
+        Brand.line,
+    },
+
+    suggestionIcon: {
+      width: 34,
+      height: 34,
+      alignItems: 'center',
+      justifyContent:
+        'center',
+      borderRadius: 17,
+      backgroundColor:
+        Brand.blush,
+    },
+
+    suggestionText: {
+      flex: 1,
+      marginHorizontal: 10,
+      color: Brand.ink,
+      fontSize: 13,
+      lineHeight: 18,
+      fontWeight: '600',
+    },
+
+    selectedDestination: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 7,
+      marginTop: 9,
+    },
+
+    selectedDestinationText: {
+      flex: 1,
+      color: '#38785A',
+      fontSize: 11,
+      fontWeight: '700',
+    },
+
+    errorText: {
+      marginTop: 8,
+      color: '#B42318',
+      fontSize: 11,
+      lineHeight: 16,
     },
 
     optionGrid: {
@@ -1145,7 +1810,8 @@ const styles =
       minWidth: 78,
       minHeight: 42,
       alignItems: 'center',
-      justifyContent: 'center',
+      justifyContent:
+        'center',
       paddingHorizontal: 13,
       borderWidth: 1,
       borderColor:
@@ -1178,6 +1844,7 @@ const styles =
       marginTop: 9,
       color: Brand.muted,
       fontSize: 12,
+      lineHeight: 17,
     },
 
     selector: {
@@ -1292,7 +1959,8 @@ const styles =
     },
 
     startButtonText: {
-      color: Brand.white,
+      color:
+        Brand.white,
       fontSize: 15,
       fontWeight: '800',
     },
