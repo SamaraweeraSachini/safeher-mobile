@@ -1,4 +1,5 @@
 import {
+  collection,
   doc,
   getDocFromServer,
   runTransaction,
@@ -13,6 +14,8 @@ import type {
   SosLocationResult,
   SosTrustedContact,
 } from '@/src/services/sos-preparation-service';
+
+export type SosClosedStatus = 'cancelled' | 'resolved';
 
 export type ActiveSosRequest = {
   id: string;
@@ -30,9 +33,12 @@ function readActiveRequest(
   userId: string,
   data: DocumentData,
 ): ActiveSosRequest | null {
-  if (data.status !== 'active') return null;
+  if (data.status === 'cancelled' || data.status === 'resolved') {
+    return null;
+  }
 
   if (
+    data.status !== 'active' ||
     data.userId !== userId ||
     data.simulation !== true ||
     !(data.activatedAt instanceof Timestamp) ||
@@ -123,7 +129,9 @@ export async function saveActiveSosRequest(
   userId: string,
   preparation: PreparedSos,
 ): Promise<ActiveSosRequest> {
-  if (!preparation.location) {
+  const location = preparation.location;
+
+  if (!location) {
     throw new Error('Wait for the location result before saving SOS.');
   }
 
@@ -134,7 +142,6 @@ export async function saveActiveSosRequest(
   }
 
   const reference = requestReference(userId);
-  const location = preparation.location;
 
   return runTransaction(firestore, async (transaction) => {
     const snapshot = await transaction.get(reference);
@@ -143,13 +150,11 @@ export async function saveActiveSosRequest(
       const existing = readActiveRequest(userId, snapshot.data());
 
       if (existing) {
-        // Repeated confirmation or retry must not overwrite active SOS.
         return existing;
       }
 
-      throw new Error(
-        'The previous SOS record is closed. Starting another request will be enabled with the SOS lifecycle task.',
-      );
+      // A closed request already has a separate history record.
+      // The current-request slot can now hold a new activation.
     }
 
     transaction.set(reference, {
@@ -185,14 +190,16 @@ export async function saveActiveSosRequest(
 export async function updateActiveSosLocation(
   userId: string,
   location: SosLocationResult,
+  expectedActivatedAt: string,
 ): Promise<ActiveSosRequest> {
-  if (!location.coordinates) {
+  const coordinates = location.coordinates;
+
+  if (!coordinates) {
     throw new Error(location.message);
   }
 
-  const reference = requestReference(userId);
-
   return runTransaction(firestore, async (transaction) => {
+    const reference = requestReference(userId);
     const snapshot = await transaction.get(reference);
 
     if (!snapshot.exists()) {
@@ -201,13 +208,16 @@ export async function updateActiveSosLocation(
 
     const existing = readActiveRequest(userId, snapshot.data());
 
-    if (!existing) {
-      throw new Error('This SOS request is no longer active.');
+    if (
+      !existing ||
+      existing.preparation.activatedAt !== expectedActivatedAt
+    ) {
+      throw new Error('The active SOS request changed. Reload the screen.');
     }
 
     transaction.update(reference, {
-      latitude: location.coordinates!.latitude,
-      longitude: location.coordinates!.longitude,
+      latitude: coordinates.latitude,
+      longitude: coordinates.longitude,
       locationMessage: location.message,
       locationUpdatedAt: serverTimestamp(),
     });
@@ -219,5 +229,67 @@ export async function updateActiveSosLocation(
         location,
       },
     };
+  });
+}
+
+export async function closeActiveSosRequest(
+  userId: string,
+  expectedActivatedAt: string,
+  status: SosClosedStatus,
+): Promise<SosClosedStatus> {
+  const reference = requestReference(userId);
+
+  // Allocate once, outside the transaction retry callback.
+  const historyReference = doc(
+    collection(firestore, 'users', userId, 'sosRequestHistory'),
+  );
+
+  return runTransaction(firestore, async (transaction) => {
+    const snapshot = await transaction.get(reference);
+
+    if (!snapshot.exists()) {
+      throw new Error('No SOS request was found.');
+    }
+
+    const data = snapshot.data();
+
+    if (
+      data.userId !== userId ||
+      data.simulation !== true ||
+      !(data.activatedAt instanceof Timestamp) ||
+      data.activatedAt.toDate().toISOString() !== expectedActivatedAt
+    ) {
+      throw new Error('The SOS request changed. Reload before continuing.');
+    }
+
+    if (data.status === status) {
+      // An already completed retry does not create another history entry.
+      return status;
+    }
+
+    if (data.status !== 'active') {
+      throw new Error('This SOS request is already closed.');
+    }
+
+    const closure =
+      status === 'cancelled'
+        ? {
+            status,
+            cancelledAt: serverTimestamp(),
+          }
+        : {
+            status,
+            resolvedAt: serverTimestamp(),
+          };
+
+    // Current state and history are committed together.
+    transaction.update(reference, closure);
+
+    transaction.set(historyReference, {
+      ...data,
+      ...closure,
+    });
+
+    return status;
   });
 }
