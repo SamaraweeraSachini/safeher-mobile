@@ -1,5 +1,5 @@
 import { Ionicons } from '@expo/vector-icons';
-import { router } from 'expo-router';
+import { type Href, router } from 'expo-router';
 import {
   Pressable,
   ScrollView,
@@ -20,7 +20,8 @@ type GuidelineIcon =
   | 'create-outline'
   | 'time-outline'
   | 'map-outline'
-  | 'documents-outline';
+  | 'documents-outline'
+  | 'list-outline';
 
 function GuidelineItem({
   icon,
@@ -74,21 +75,16 @@ export default function ReportingGuidelinesScreen() {
           before you submit a report.
         </Text>
 
-        <Text style={styles.sectionTitle}>What you can report</Text>
-        <Text style={styles.sectionBody}>
-          Report a safety concern you experienced or personally witnessed. Choose
-          the closest type: harassment, stalking, poor lighting, unsafe transport,
-          assault, suspicious activity, or other.
-        </Text>
+        <Text style={styles.sectionTitle}>Report accurately</Text>
         <GuidelineItem
           icon="checkmark-circle-outline"
-          title="Report what you know"
-          description="Only include information you believe is true. If you are unsure of a detail, leave it out rather than guessing."
+          title="Include only what you know is true"
+          description="Report a safety concern you experienced or personally witnessed. If you are unsure of a detail, leave it out. Do not guess a name, a motive, or what someone intended."
         />
         <GuidelineItem
           icon="create-outline"
           title="Describe what happened"
-          description="Say what you saw or experienced, and when it happened. A clear description is more useful than a long one. Do not guess someone's name, motive, or identity."
+          description="Say what you saw or experienced, where it was, and when it happened. A clear description is more useful than a long one."
         />
         <GuidelineItem
           icon="location-outline"
@@ -96,16 +92,26 @@ export default function ReportingGuidelinesScreen() {
           description="Set the location to the road, stop, or public area where the concern happened. Do not use a report to publish someone's home address."
         />
 
-        <Text style={styles.sectionTitle}>Privacy</Text>
+        <Text style={styles.sectionTitle}>Choose the correct category</Text>
+        <Text style={styles.sectionBody}>
+          Pick the closest incident type. The Safety Map and route warnings use this type, so the wrong category gives other people the wrong information.
+        </Text>
         <GuidelineItem
-          icon="shield-checkmark-outline"
-          title="Leave personal details out"
-          description="Do not include full names, phone numbers, email addresses, home addresses, or other details that identify someone."
+          icon="list-outline"
+          title="Match the type to what happened"
+          description="Harassment is unwanted or threatening behaviour. Stalking is repeated following or monitoring. Poor lighting is a dark or badly lit place. Unsafe transport is a journey or vehicle that felt unsafe. Assault is physical violence or an attempt. Suspicious activity is other behaviour that may put people at risk. Choose Other only when none of these fit."
         />
+
+        <Text style={styles.sectionTitle}>Protect a victim's identity</Text>
         <GuidelineItem
           icon="eye-off-outline"
-          title="Protect the people involved"
-          description="Do not share private or sensitive information about a victim, witness, or anyone else involved. Describe the safety concern, not their private life."
+          title="Do not identify the person affected"
+          description="Do not include a victim's name, photo, phone number, age, school, workplace, home address, or other details that could identify them. Describe the safety concern, not who they are."
+        />
+        <GuidelineItem
+          icon="shield-checkmark-outline"
+          title="Leave private details out"
+          description="Do not include full names, phone numbers, email addresses, or home addresses of a victim, a witness, or anyone else involved."
         />
         <GuidelineItem
           icon="person-outline"
@@ -113,16 +119,18 @@ export default function ReportingGuidelinesScreen() {
           description="You can submit anonymously. Even if you do not, other people still do not see your name on the report. They can see the incident type, description, place, and time while the report is active."
         />
 
-        <Text style={styles.sectionTitle}>Reports that should not be submitted</Text>
+        <Text style={styles.sectionTitle}>False and offensive reports are not allowed</Text>
         <GuidelineItem
           icon="ban-outline"
-          title="No false or misleading reports"
+          title="Do not submit a false report"
           description="Do not knowingly submit false, exaggerated, or misleading information. Reports are for genuine safety concerns."
+          important
         />
         <GuidelineItem
-          icon="person-outline"
-          title="No offensive or harmful content"
+          icon="ban-outline"
+          title="Do not submit offensive content"
           description="Do not include abusive, threatening, discriminatory, sexually explicit, or otherwise offensive content."
+          important
         />
 
         <Text style={styles.sectionTitle}>After you submit</Text>
@@ -145,10 +153,18 @@ export default function ReportingGuidelinesScreen() {
         <Text style={styles.sectionTitle}>During an emergency</Text>
         <GuidelineItem
           icon="warning-outline"
-          title="Immediate danger requires emergency help"
-          description="SafeHer incident reporting is not a replacement for emergency services. If you or someone else is in immediate danger, contact the appropriate emergency service or use the SafeHer SOS feature."
+          title="Call emergency services first"
+          description="If you or someone else is in immediate danger, call 119 for the police. If someone needs urgent medical help, call 1990. SafeHer reporting is not a replacement for the police, an ambulance, or the fire service. You can also use SafeHer SOS when you cannot safely make a call."
           important
         />
+        <Pressable
+          onPress={() => router.push('/safety-resources' as Href)}
+          accessibilityRole="button"
+          accessibilityLabel="Open safety resources"
+          style={({ pressed }) => [styles.resourceLink, pressed && styles.pressed]}
+        >
+          <Text style={styles.resourceLinkText}>Open safety resources</Text>
+        </Pressable>
 
         <View style={styles.privacyNotice}>
           <Ionicons name="lock-closed-outline" size={22} color="#7A1F3D" />
@@ -164,11 +180,11 @@ export default function ReportingGuidelinesScreen() {
 
         <View style={styles.summaryCard}>
           <Text style={styles.summaryTitle}>Before you submit</Text>
+          <SummaryRow text="The description says only what you know is true." />
           <SummaryRow text="The incident type matches what happened." />
-          <SummaryRow text="The description says what you know, without guessing." />
-          <SummaryRow text="The place is a public area, not someone's home." />
-          <SummaryRow text="Names, phone numbers, and other private details are left out." />
-          <SummaryRow text="You are not in immediate danger. If you are, contact emergency services." />
+          <SummaryRow text="A victim's name and other identifying details are left out." />
+          <SummaryRow text="The report is not false or offensive." />
+          <SummaryRow text="You are not in immediate danger. If you are, call 119." />
         </View>
 
         <Pressable
@@ -303,6 +319,17 @@ const styles = StyleSheet.create({
     backgroundColor: '#C43D74',
   },
   returnButtonText: { color: '#FFFFFF', fontSize: 16, fontWeight: '800' },
+  resourceLink: {
+    alignSelf: 'flex-start',
+    marginTop: -4,
+    marginBottom: 16,
+    paddingVertical: 8,
+  },
+  resourceLinkText: {
+    color: '#C43D74',
+    fontSize: 15,
+    fontWeight: '800',
+  },
   footerText: {
     marginTop: 14,
     color: '#755F6A',

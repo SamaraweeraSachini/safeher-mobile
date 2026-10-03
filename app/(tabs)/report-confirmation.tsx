@@ -61,6 +61,14 @@ export default function ReportConfirmationScreen() {
             Thank you for helping make the SafeHer community safer.
             Your incident report was submitted successfully.
           </Text>
+
+          <Pressable
+            onPress={() => router.push('/reporting-guidelines')}
+            accessibilityRole="button"
+            accessibilityLabel="Read reporting guidelines"
+          >
+            <Text style={styles.guidelinesLink}>Read reporting guidelines</Text>
+          </Pressable>
         </View>
 
         <View style={styles.communityCard}>
@@ -255,6 +263,14 @@ const styles = StyleSheet.create({
     textAlign: "center",
     marginTop: 9,
     paddingHorizontal: 12,
+  },
+
+  guidelinesLink: {
+    marginTop: 14,
+    color: Brand.burgundy,
+    fontSize: 15,
+    fontWeight: "800",
+    textAlign: "center",
   },
 
   communityCard: {
