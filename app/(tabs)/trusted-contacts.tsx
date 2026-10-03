@@ -1,7 +1,6 @@
-
 import { Ionicons } from '@expo/vector-icons';
+import { useRouter } from 'expo-router';
 import { useEffect, useState } from 'react';
-
 import {
   ActivityIndicator,
   Alert,
@@ -15,13 +14,9 @@ import {
   TextInput,
   View,
 } from 'react-native';
-
 import { SafeAreaView } from 'react-native-safe-area-context';
 
-import { useRouter } from 'expo-router';
-
 import { useAuth } from '@/src/context/AuthContext';
-
 import {
   deleteTrustedContact,
   saveTrustedContact,
@@ -57,6 +52,7 @@ const EMPTY_FORM: TrustedContactInput = {
   name: '',
   relationship: '',
   phoneNumber: '',
+  email: '',
   isPrimary: false,
 };
 
@@ -70,26 +66,13 @@ export default function TrustedContactsScreen() {
     isRegisteredUser,
   } = useAuth();
 
-  const [contacts, setContacts] = useState<
-    TrustedContact[]
-  >([]);
-
+  const [contacts, setContacts] = useState<TrustedContact[]>([]);
   const [loading, setLoading] = useState(true);
-
-  const [error, setError] = useState<string | null>(
-    null
-  );
-
-  const [modalVisible, setModalVisible] =
-    useState(false);
-
+  const [error, setError] = useState<string | null>(null);
+  const [modalVisible, setModalVisible] = useState(false);
   const [saving, setSaving] = useState(false);
-
-  const [editingContactId, setEditingContactId] =
-    useState<string | null>(null);
-
-  const [form, setForm] =
-    useState<TrustedContactInput>(EMPTY_FORM);
+  const [editingContactId, setEditingContactId] = useState<string | null>(null);
+  const [form, setForm] = useState<TrustedContactInput>(EMPTY_FORM);
 
   useEffect(() => {
     if (authLoading) {
@@ -121,20 +104,11 @@ export default function TrustedContactsScreen() {
     );
 
     return unsubscribe;
-  }, [
-    user,
-    authLoading,
-    isGuest,
-    isRegisteredUser,
-  ]);
+  }, [user, authLoading, isGuest, isRegisteredUser]);
 
   function openAddModal() {
     setEditingContactId(null);
-
-    setForm({
-      ...EMPTY_FORM,
-    });
-
+    setForm({ ...EMPTY_FORM });
     setModalVisible(true);
   }
 
@@ -145,6 +119,7 @@ export default function TrustedContactsScreen() {
       name: contact.name,
       relationship: contact.relationship,
       phoneNumber: contact.phoneNumber,
+      email: contact.email ?? '',
       isPrimary: contact.isPrimary,
     });
 
@@ -158,9 +133,7 @@ export default function TrustedContactsScreen() {
 
     setModalVisible(false);
     setEditingContactId(null);
-    setForm({
-      ...EMPTY_FORM,
-    });
+    setForm({ ...EMPTY_FORM });
   }
 
   function updateForm(
@@ -181,13 +154,13 @@ export default function TrustedContactsScreen() {
     const name = form.name.trim();
     const relationship = form.relationship.trim();
     const phoneNumber = form.phoneNumber.trim();
+    const email = form.email?.trim() ?? '';
 
     if (!name || !relationship || !phoneNumber) {
       Alert.alert(
         'Missing information',
         'Please enter the name, relationship and phone number.'
       );
-
       return;
     }
 
@@ -196,7 +169,14 @@ export default function TrustedContactsScreen() {
         'Invalid phone number',
         'Please enter a valid phone number.'
       );
+      return;
+    }
 
+    if (email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+      Alert.alert(
+        'Invalid email address',
+        'Please enter a valid email address or leave the email field empty.'
+      );
       return;
     }
 
@@ -204,6 +184,7 @@ export default function TrustedContactsScreen() {
       name,
       relationship,
       phoneNumber,
+      email,
       isPrimary: form.isPrimary,
     };
 
@@ -218,9 +199,7 @@ export default function TrustedContactsScreen() {
 
       setModalVisible(false);
       setEditingContactId(null);
-      setForm({
-        ...EMPTY_FORM,
-      });
+      setForm({ ...EMPTY_FORM });
 
       Alert.alert(
         'Success',
@@ -264,10 +243,7 @@ export default function TrustedContactsScreen() {
     }
 
     try {
-      await deleteTrustedContact(
-        user.uid,
-        contactId
-      );
+      await deleteTrustedContact(user.uid, contactId);
 
       Alert.alert(
         'Deleted',
@@ -281,9 +257,7 @@ export default function TrustedContactsScreen() {
     }
   }
 
-  async function handleMakePrimary(
-    contact: TrustedContact
-  ) {
+  async function handleMakePrimary(contact: TrustedContact) {
     if (!user || contact.isPrimary) {
       return;
     }
@@ -296,6 +270,7 @@ export default function TrustedContactsScreen() {
           name: contact.name,
           relationship: contact.relationship,
           phoneNumber: contact.phoneNumber,
+          email: contact.email ?? '',
           isPrimary: true,
         }
       );
@@ -430,9 +405,7 @@ export default function TrustedContactsScreen() {
 
               <Text style={styles.sectionSubtitle}>
                 {contacts.length}{' '}
-                {contacts.length === 1
-                  ? 'contact'
-                  : 'contacts'}{' '}
+                {contacts.length === 1 ? 'contact' : 'contacts'}{' '}
                 saved
               </Text>
             </View>
@@ -554,8 +527,8 @@ export default function TrustedContactsScreen() {
 
               <View style={styles.contactDivider} />
 
-              <View style={styles.phoneRow}>
-                <View style={styles.phoneIcon}>
+              <View style={styles.detailRow}>
+                <View style={styles.detailIcon}>
                   <Ionicons
                     name="call-outline"
                     size={18}
@@ -563,17 +536,31 @@ export default function TrustedContactsScreen() {
                   />
                 </View>
 
-                <Text style={styles.phoneNumber}>
+                <Text style={styles.detailText}>
                   {contact.phoneNumber}
                 </Text>
               </View>
 
+              {!!contact.email?.trim() && (
+                <View style={styles.detailRow}>
+                  <View style={styles.detailIcon}>
+                    <Ionicons
+                      name="mail-outline"
+                      size={18}
+                      color={COLORS.primary}
+                    />
+                  </View>
+
+                  <Text style={styles.detailText}>
+                    {contact.email}
+                  </Text>
+                </View>
+              )}
+
               {!contact.isPrimary && (
                 <Pressable
                   style={styles.makePrimaryButton}
-                  onPress={() =>
-                    void handleMakePrimary(contact)
-                  }
+                  onPress={() => void handleMakePrimary(contact)}
                 >
                   <Ionicons
                     name="star-outline"
@@ -593,9 +580,7 @@ export default function TrustedContactsScreen() {
                     styles.editButton,
                     pressed && styles.pressed,
                   ]}
-                  onPress={() =>
-                    openEditModal(contact)
-                  }
+                  onPress={() => openEditModal(contact)}
                   accessibilityRole="button"
                   accessibilityLabel={`Edit ${contact.name}`}
                 >
@@ -615,9 +600,7 @@ export default function TrustedContactsScreen() {
                     styles.deleteButton,
                     pressed && styles.pressed,
                   ]}
-                  onPress={() =>
-                    confirmDelete(contact)
-                  }
+                  onPress={() => confirmDelete(contact)}
                   accessibilityRole="button"
                   accessibilityLabel={`Delete ${contact.name}`}
                 >
@@ -706,9 +689,7 @@ export default function TrustedContactsScreen() {
                 placeholder="Enter contact name"
                 placeholderTextColor="#A8959E"
                 value={form.name}
-                onChangeText={value =>
-                  updateForm('name', value)
-                }
+                onChangeText={value => updateForm('name', value)}
                 autoCapitalize="words"
                 editable={!saving}
               />
@@ -727,21 +708,17 @@ export default function TrustedContactsScreen() {
                       key={relationship}
                       style={[
                         styles.relationshipChip,
-                        selected &&
-                          styles.relationshipChipSelected,
+                        selected && styles.relationshipChipSelected,
                       ]}
                       onPress={() =>
-                        updateForm(
-                          'relationship',
-                          relationship
-                        )
+                        updateForm('relationship', relationship)
                       }
+                      disabled={saving}
                     >
                       <Text
                         style={[
                           styles.relationshipText,
-                          selected &&
-                            styles.relationshipTextSelected,
+                          selected && styles.relationshipTextSelected,
                         ]}
                       >
                         {relationship}
@@ -767,21 +744,41 @@ export default function TrustedContactsScreen() {
                 editable={!saving}
               />
 
+              <Text style={styles.inputLabel}>
+                Email Address (Optional)
+              </Text>
+
+              <TextInput
+                style={styles.textInput}
+                placeholder="Enter email address"
+                placeholderTextColor="#A8959E"
+                value={form.email ?? ''}
+                onChangeText={value =>
+                  updateForm('email', value)
+                }
+                keyboardType="email-address"
+                autoCapitalize="none"
+                autoCorrect={false}
+                textContentType="emailAddress"
+                editable={!saving}
+              />
+
+              <Text style={styles.optionalHint}>
+                You can leave this field empty if the contact
+                does not have an email address.
+              </Text>
+
               <Pressable
                 style={styles.primaryOption}
                 onPress={() =>
-                  updateForm(
-                    'isPrimary',
-                    !form.isPrimary
-                  )
+                  updateForm('isPrimary', !form.isPrimary)
                 }
                 disabled={saving}
               >
                 <View
                   style={[
                     styles.checkbox,
-                    form.isPrimary &&
-                      styles.checkboxSelected,
+                    form.isPrimary && styles.checkboxSelected,
                   ]}
                 >
                   {form.isPrimary && (
@@ -798,9 +795,7 @@ export default function TrustedContactsScreen() {
                     Set as primary contact
                   </Text>
 
-                  <Text
-                    style={styles.primaryOptionDescription}
-                  >
+                  <Text style={styles.primaryOptionDescription}>
                     Only one contact can be primary at a time.
                   </Text>
                 </View>
@@ -822,9 +817,7 @@ export default function TrustedContactsScreen() {
                     styles.saveButton,
                     saving && styles.disabledButton,
                   ]}
-                  onPress={() =>
-                    void handleSave()
-                  }
+                  onPress={() => void handleSave()}
                   disabled={saving}
                 >
                   {saving ? (
@@ -854,54 +847,45 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: COLORS.background,
   },
-
   container: {
     flex: 1,
   },
-
   contentContainer: {
     paddingHorizontal: 20,
     paddingBottom: 35,
   },
-
   loadingContainer: {
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
     gap: 15,
   },
-
   loadingText: {
     color: COLORS.secondaryText,
     fontSize: 14,
     fontWeight: '600',
   },
-
   header: {
     minHeight: 85,
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
   },
-
   headerTextContainer: {
     flex: 1,
     paddingRight: 10,
   },
-
   pageTitle: {
     fontSize: 26,
     fontWeight: '800',
     color: COLORS.text,
   },
-
   pageSubtitle: {
     marginTop: 5,
     fontSize: 13,
     lineHeight: 19,
     color: COLORS.secondaryText,
   },
-
   headerIcon: {
     width: 47,
     height: 47,
@@ -910,7 +894,6 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
   },
-
   infoCard: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -921,7 +904,6 @@ const styles = StyleSheet.create({
     padding: 15,
     marginTop: 12,
   },
-
   infoIcon: {
     width: 43,
     height: 43,
@@ -930,25 +912,21 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
   },
-
   infoTextContainer: {
     flex: 1,
     marginLeft: 12,
   },
-
   infoTitle: {
     fontSize: 14,
     fontWeight: '800',
     color: COLORS.text,
   },
-
   infoDescription: {
     marginTop: 4,
     fontSize: 12,
     lineHeight: 18,
     color: COLORS.secondaryText,
   },
-
   sectionHeader: {
     flexDirection: 'row',
     justifyContent: 'space-between',
@@ -956,19 +934,16 @@ const styles = StyleSheet.create({
     marginTop: 27,
     marginBottom: 15,
   },
-
   sectionTitle: {
     fontSize: 18,
     fontWeight: '800',
     color: COLORS.text,
   },
-
   sectionSubtitle: {
     marginTop: 4,
     fontSize: 12,
     color: COLORS.secondaryText,
   },
-
   addButton: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -979,17 +954,14 @@ const styles = StyleSheet.create({
     borderRadius: 13,
     backgroundColor: COLORS.primary,
   },
-
   addButtonText: {
     fontSize: 13,
     fontWeight: '800',
     color: COLORS.white,
   },
-
   pressed: {
     opacity: 0.7,
   },
-
   errorCard: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -1000,14 +972,12 @@ const styles = StyleSheet.create({
     borderRadius: 15,
     padding: 15,
   },
-
   errorText: {
     flex: 1,
     fontSize: 13,
     color: COLORS.danger,
     lineHeight: 19,
   },
-
   emptyCard: {
     alignItems: 'center',
     backgroundColor: COLORS.white,
@@ -1018,7 +988,6 @@ const styles = StyleSheet.create({
     paddingVertical: 35,
     marginTop: 5,
   },
-
   emptyIcon: {
     width: 82,
     height: 82,
@@ -1027,7 +996,6 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
-
   emptyTitle: {
     marginTop: 20,
     fontSize: 18,
@@ -1035,7 +1003,6 @@ const styles = StyleSheet.create({
     color: COLORS.text,
     textAlign: 'center',
   },
-
   emptyDescription: {
     marginTop: 9,
     fontSize: 13,
@@ -1043,7 +1010,6 @@ const styles = StyleSheet.create({
     color: COLORS.secondaryText,
     textAlign: 'center',
   },
-
   emptyButton: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -1055,13 +1021,11 @@ const styles = StyleSheet.create({
     borderRadius: 14,
     marginTop: 23,
   },
-
   emptyButtonText: {
     color: COLORS.white,
     fontSize: 13,
     fontWeight: '800',
   },
-
   contactCard: {
     backgroundColor: COLORS.white,
     borderWidth: 1,
@@ -1070,12 +1034,10 @@ const styles = StyleSheet.create({
     padding: 16,
     marginBottom: 15,
   },
-
   contactHeader: {
     flexDirection: 'row',
     alignItems: 'center',
   },
-
   contactAvatar: {
     width: 49,
     height: 49,
@@ -1084,30 +1046,25 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
-
   avatarText: {
     fontSize: 20,
     fontWeight: '800',
     color: COLORS.primaryDark,
   },
-
   contactMain: {
     flex: 1,
     marginLeft: 12,
   },
-
   contactName: {
     fontSize: 15,
     fontWeight: '800',
     color: COLORS.text,
   },
-
   contactRelationship: {
     fontSize: 12,
     color: COLORS.secondaryText,
     marginTop: 4,
   },
-
   primaryBadge: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -1117,26 +1074,23 @@ const styles = StyleSheet.create({
     paddingVertical: 6,
     borderRadius: 20,
   },
-
   primaryBadgeText: {
     color: '#9A621F',
     fontSize: 10,
     fontWeight: '800',
   },
-
   contactDivider: {
     height: 1,
     backgroundColor: '#F3E7EC',
     marginVertical: 14,
   },
-
-  phoneRow: {
+  detailRow: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 9,
+    marginBottom: 9,
   },
-
-  phoneIcon: {
+  detailIcon: {
     width: 33,
     height: 33,
     borderRadius: 10,
@@ -1144,13 +1098,12 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
   },
-
-  phoneNumber: {
+  detailText: {
+    flex: 1,
     fontSize: 13,
     fontWeight: '600',
     color: COLORS.text,
   },
-
   makePrimaryButton: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -1159,19 +1112,16 @@ const styles = StyleSheet.create({
     alignSelf: 'flex-start',
     paddingVertical: 5,
   },
-
   makePrimaryText: {
     color: COLORS.primary,
     fontSize: 12,
     fontWeight: '700',
   },
-
   contactActions: {
     flexDirection: 'row',
     gap: 10,
     marginTop: 15,
   },
-
   editButton: {
     flex: 1,
     flexDirection: 'row',
@@ -1182,13 +1132,11 @@ const styles = StyleSheet.create({
     borderRadius: 12,
     backgroundColor: '#FFF0F5',
   },
-
   editButtonText: {
     color: COLORS.primaryDark,
     fontSize: 12,
     fontWeight: '800',
   },
-
   deleteButton: {
     flex: 1,
     flexDirection: 'row',
@@ -1199,13 +1147,11 @@ const styles = StyleSheet.create({
     borderRadius: 12,
     backgroundColor: '#FEF3F2',
   },
-
   deleteButtonText: {
     color: COLORS.danger,
     fontSize: 12,
     fontWeight: '800',
   },
-
   footerInfo: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -1213,19 +1159,16 @@ const styles = StyleSheet.create({
     gap: 7,
     marginTop: 8,
   },
-
   footerInfoText: {
     fontSize: 11,
     color: COLORS.secondaryText,
   },
-
   restrictedContainer: {
     flex: 1,
     alignItems: 'center',
     justifyContent: 'center',
     paddingHorizontal: 30,
   },
-
   restrictedIcon: {
     width: 85,
     height: 85,
@@ -1234,7 +1177,6 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
-
   restrictedTitle: {
     fontSize: 20,
     fontWeight: '800',
@@ -1242,7 +1184,6 @@ const styles = StyleSheet.create({
     marginTop: 20,
     textAlign: 'center',
   },
-
   restrictedDescription: {
     fontSize: 14,
     lineHeight: 22,
@@ -1250,7 +1191,6 @@ const styles = StyleSheet.create({
     textAlign: 'center',
     marginTop: 10,
   },
-
   backButton: {
     marginTop: 25,
     backgroundColor: COLORS.primary,
@@ -1258,18 +1198,15 @@ const styles = StyleSheet.create({
     paddingVertical: 13,
     borderRadius: 13,
   },
-
   backButtonText: {
     color: COLORS.white,
     fontWeight: '800',
   },
-
   modalOverlay: {
     flex: 1,
     justifyContent: 'flex-end',
     backgroundColor: 'rgba(35, 19, 28, 0.45)',
   },
-
   modalContainer: {
     maxHeight: '90%',
     backgroundColor: COLORS.background,
@@ -1279,26 +1216,22 @@ const styles = StyleSheet.create({
     paddingTop: 23,
     paddingBottom: Platform.OS === 'ios' ? 30 : 20,
   },
-
   modalHeader: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
     marginBottom: 23,
   },
-
   modalTitle: {
     fontSize: 21,
     fontWeight: '800',
     color: COLORS.text,
   },
-
   modalSubtitle: {
     marginTop: 5,
     fontSize: 12,
     color: COLORS.secondaryText,
   },
-
   closeButton: {
     width: 38,
     height: 38,
@@ -1307,7 +1240,6 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
-
   inputLabel: {
     fontSize: 13,
     fontWeight: '800',
@@ -1315,7 +1247,6 @@ const styles = StyleSheet.create({
     marginBottom: 9,
     marginTop: 15,
   },
-
   textInput: {
     height: 50,
     borderWidth: 1,
@@ -1326,13 +1257,17 @@ const styles = StyleSheet.create({
     fontSize: 14,
     color: COLORS.text,
   },
-
+  optionalHint: {
+    fontSize: 11,
+    lineHeight: 16,
+    color: COLORS.secondaryText,
+    marginTop: 7,
+  },
   relationshipContainer: {
     flexDirection: 'row',
     flexWrap: 'wrap',
     gap: 9,
   },
-
   relationshipChip: {
     paddingHorizontal: 14,
     paddingVertical: 10,
@@ -1341,23 +1276,19 @@ const styles = StyleSheet.create({
     borderColor: COLORS.border,
     backgroundColor: COLORS.white,
   },
-
   relationshipChipSelected: {
     borderColor: COLORS.primary,
     backgroundColor: COLORS.lightPink,
   },
-
   relationshipText: {
     fontSize: 12,
     fontWeight: '600',
     color: COLORS.secondaryText,
   },
-
   relationshipTextSelected: {
     color: COLORS.primaryDark,
     fontWeight: '800',
   },
-
   primaryOption: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -1368,7 +1299,6 @@ const styles = StyleSheet.create({
     borderRadius: 14,
     backgroundColor: COLORS.white,
   },
-
   checkbox: {
     width: 23,
     height: 23,
@@ -1378,36 +1308,30 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
-
   checkboxSelected: {
     backgroundColor: COLORS.primary,
     borderColor: COLORS.primary,
   },
-
   primaryOptionText: {
     flex: 1,
     marginLeft: 11,
   },
-
   primaryOptionTitle: {
     fontSize: 13,
     fontWeight: '800',
     color: COLORS.text,
   },
-
   primaryOptionDescription: {
     fontSize: 11,
     color: COLORS.secondaryText,
     marginTop: 4,
   },
-
   modalActions: {
     flexDirection: 'row',
     gap: 11,
     marginTop: 25,
     marginBottom: 10,
   },
-
   cancelButton: {
     flex: 1,
     alignItems: 'center',
@@ -1416,13 +1340,11 @@ const styles = StyleSheet.create({
     borderRadius: 13,
     backgroundColor: '#F3E7EC',
   },
-
   cancelButtonText: {
     color: COLORS.text,
     fontSize: 13,
     fontWeight: '800',
   },
-
   saveButton: {
     flex: 1.4,
     alignItems: 'center',
@@ -1431,13 +1353,11 @@ const styles = StyleSheet.create({
     borderRadius: 13,
     backgroundColor: COLORS.primary,
   },
-
   saveButtonText: {
     color: COLORS.white,
     fontSize: 13,
     fontWeight: '800',
   },
-
   disabledButton: {
     opacity: 0.6,
   },
