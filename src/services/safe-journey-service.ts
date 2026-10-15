@@ -32,43 +32,67 @@ export type SafeJourneyErrorCode =
   | 'firestore-error';
 
 export class SafeJourneyError extends Error {
-  code: SafeJourneyErrorCode;
+  code:
+    SafeJourneyErrorCode;
 
   constructor(
-    code: SafeJourneyErrorCode,
-    message: string
-  ) {
-    super(message);
+    code:
+      SafeJourneyErrorCode,
 
-    this.name = 'SafeJourneyError';
-    this.code = code;
+    message:
+      string
+  ) {
+    super(
+      message
+    );
+
+    this.name =
+      'SafeJourneyError';
+
+    this.code =
+      code;
   }
 }
 
-function isValidCoordinate(
-  value: number
-): boolean {
-  return Number.isFinite(value);
+function getAuthenticatedUser() {
+  const user =
+    firebaseAuth.currentUser;
+
+  if (!user) {
+    throw new SafeJourneyError(
+      'not-authenticated',
+      'You must be signed in to use Safe Journey.'
+    );
+  }
+
+  return user;
 }
 
 function validateCurrentLocation(
-  configuration: SafeJourneyConfiguration
+  configuration:
+    SafeJourneyConfiguration
 ): void {
-  const { currentLocation } =
+  const {
+    currentLocation,
+  } =
     configuration;
 
   if (
     !currentLocation ||
-    !isValidCoordinate(
+    !Number.isFinite(
       currentLocation.latitude
     ) ||
-    !isValidCoordinate(
+    !Number.isFinite(
       currentLocation.longitude
     ) ||
-    currentLocation.latitude < -90 ||
-    currentLocation.latitude > 90 ||
-    currentLocation.longitude < -180 ||
-    currentLocation.longitude > 180
+    currentLocation.latitude <
+      -90 ||
+    currentLocation.latitude >
+      90 ||
+    currentLocation.longitude <
+      -180 ||
+    currentLocation.longitude >
+      180
   ) {
     throw new SafeJourneyError(
       'current-location-required',
@@ -78,11 +102,14 @@ function validateCurrentLocation(
 }
 
 function validateJourney(
-  configuration: SafeJourneyConfiguration
+  configuration:
+    SafeJourneyConfiguration
 ): void {
   if (
-    configuration.destination.trim()
-      .length === 0
+    configuration.destination
+      .trim()
+      .length ===
+    0
   ) {
     throw new SafeJourneyError(
       'destination-required',
@@ -94,15 +121,15 @@ function validateJourney(
     configuration
   );
 
-  const arrivalTime =
-    configuration.expectedArrivalTime;
-
   if (
-    !(arrivalTime instanceof Date) ||
-    Number.isNaN(
-      arrivalTime.getTime()
+    !(
+      configuration.expectedArrivalTime instanceof
+      Date
     ) ||
-    arrivalTime.getTime() <=
+    Number.isNaN(
+      configuration.expectedArrivalTime.getTime()
+    ) ||
+    configuration.expectedArrivalTime.getTime() <=
       Date.now()
   ) {
     throw new SafeJourneyError(
@@ -113,8 +140,10 @@ function validateJourney(
 
   if (
     configuration.shareJourney &&
-    configuration.trustedContactIds
-      .length === 0
+    configuration
+      .trustedContactIds
+      .length ===
+      0
   ) {
     throw new SafeJourneyError(
       'contact-required',
@@ -123,8 +152,148 @@ function validateJourney(
   }
 }
 
+function timestampToDate(
+  value:
+    unknown
+): Date | null {
+  return value instanceof
+    Timestamp
+    ? value.toDate()
+    : null;
+}
+
+function parseJourney(
+  id:
+    string,
+
+  userId:
+    string,
+
+  data:
+    Record<
+      string,
+      any
+    >
+): StoredSafeJourney {
+  const arrival =
+    timestampToDate(
+      data.expectedArrivalTime
+    );
+
+  if (!arrival) {
+    throw new SafeJourneyError(
+      'firestore-error',
+      'A Safe Journey contains invalid arrival information.'
+    );
+  }
+
+  const status =
+    data.status ===
+    'completed'
+      ? 'completed'
+      : data.status ===
+          'cancelled'
+        ? 'cancelled'
+        : 'active';
+
+  return {
+    id,
+
+    userId,
+
+    destination:
+      typeof data.destination ===
+      'string'
+        ? data.destination
+        : 'Unknown destination',
+
+    destinationLocation:
+      data.destinationLocation &&
+      Number.isFinite(
+        data.destinationLocation
+          .latitude
+      ) &&
+      Number.isFinite(
+        data.destinationLocation
+          .longitude
+      )
+        ? {
+            latitude:
+              data.destinationLocation
+                .latitude,
+
+            longitude:
+              data.destinationLocation
+                .longitude,
+          }
+        : null,
+
+    currentLocation: {
+      latitude:
+        Number(
+          data.currentLocation
+            ?.latitude
+        ),
+
+      longitude:
+        Number(
+          data.currentLocation
+            ?.longitude
+        ),
+    },
+
+    expectedArrivalTime:
+      arrival,
+
+    trustedContactIds:
+      Array.isArray(
+        data.trustedContactIds
+      )
+        ? data.trustedContactIds.filter(
+            (
+              id
+            ): id is string =>
+              typeof id ===
+              'string'
+          )
+        : [],
+
+    checkInIntervalMinutes:
+      data.checkInIntervalMinutes,
+
+    shareJourney:
+      Boolean(
+        data.shareJourney
+      ),
+
+    status,
+
+    createdAt:
+      timestampToDate(
+        data.createdAt
+      ) ??
+      new Date(),
+
+    lastCheckInAt:
+      timestampToDate(
+        data.lastCheckInAt
+      ),
+
+    completedAt:
+      timestampToDate(
+        data.completedAt
+      ),
+
+    cancelledAt:
+      timestampToDate(
+        data.cancelledAt
+      ),
+  };
+}
+
 async function ensureNoActiveJourney(
-  userId: string
+  userId:
+    string
 ): Promise<void> {
   const journeysRef =
     collection(
@@ -134,42 +303,42 @@ async function ensureNoActiveJourney(
       'safeJourneys'
     );
 
-  const activeJourneyQuery =
+  const activeQuery =
     query(
       journeysRef,
+
       where(
         'status',
         '==',
         'active'
       ),
-      limit(1)
+
+      limit(
+        1
+      )
     );
 
   const snapshot =
     await getDocs(
-      activeJourneyQuery
+      activeQuery
     );
 
-  if (!snapshot.empty) {
+  if (
+    !snapshot.empty
+  ) {
     throw new SafeJourneyError(
       'active-journey-exists',
-      'You already have an active Safe Journey. Complete or cancel it before starting another one.'
+      'You already have an active Safe Journey. Resume, complete or cancel it before starting another one.'
     );
   }
 }
 
 export async function createSafeJourney(
-  configuration: SafeJourneyConfiguration
+  configuration:
+    SafeJourneyConfiguration
 ): Promise<string> {
-  const currentUser =
-    firebaseAuth.currentUser;
-
-  if (!currentUser) {
-    throw new SafeJourneyError(
-      'not-authenticated',
-      'You must be signed in to start a Safe Journey.'
-    );
-  }
+  const user =
+    getAuthenticatedUser();
 
   validateJourney(
     configuration
@@ -177,54 +346,62 @@ export async function createSafeJourney(
 
   try {
     await ensureNoActiveJourney(
-      currentUser.uid
+      user.uid
     );
-
-    const journeysRef =
-      collection(
-        firestore,
-        'users',
-        currentUser.uid,
-        'safeJourneys'
-      );
 
     const document =
       await addDoc(
-        journeysRef,
+        collection(
+          firestore,
+          'users',
+          user.uid,
+          'safeJourneys'
+        ),
+
         {
           userId:
-            currentUser.uid,
+            user.uid,
 
           destination:
-            configuration.destination.trim(),
+            configuration
+              .destination
+              .trim(),
 
           destinationLocation:
-            configuration.destinationLocation ??
+            configuration
+              .destinationLocation ??
             null,
 
           currentLocation: {
             latitude:
-              configuration.currentLocation
+              configuration
+                .currentLocation
                 .latitude,
 
             longitude:
-              configuration.currentLocation
+              configuration
+                .currentLocation
                 .longitude,
           },
 
           expectedArrivalTime:
-            configuration.expectedArrivalTime,
+            configuration
+              .expectedArrivalTime,
 
           trustedContactIds:
-            configuration.trustedContactIds,
+            configuration
+              .trustedContactIds,
 
           checkInIntervalMinutes:
-            configuration.checkInIntervalMinutes,
+            configuration
+              .checkInIntervalMinutes,
 
           shareJourney:
-            configuration.shareJourney,
+            configuration
+              .shareJourney,
 
-          status: 'active',
+          status:
+            'active',
 
           createdAt:
             serverTimestamp(),
@@ -244,7 +421,9 @@ export async function createSafeJourney(
       );
 
     return document.id;
-  } catch (error) {
+  } catch (
+    error
+  ) {
     if (
       error instanceof
       SafeJourneyError
@@ -265,158 +444,55 @@ export async function createSafeJourney(
 }
 
 export async function getActiveSafeJourney():
-  Promise<StoredSafeJourney | null> {
-  const currentUser =
-    firebaseAuth.currentUser;
-
-  if (!currentUser) {
-    throw new SafeJourneyError(
-      'not-authenticated',
-      'You must be signed in to view your Safe Journey.'
-    );
-  }
+  Promise<
+    StoredSafeJourney | null
+  > {
+  const user =
+    getAuthenticatedUser();
 
   try {
-    const journeysRef =
-      collection(
-        firestore,
-        'users',
-        currentUser.uid,
-        'safeJourneys'
-      );
-
-    const activeJourneyQuery =
+    const activeQuery =
       query(
-        journeysRef,
+        collection(
+          firestore,
+          'users',
+          user.uid,
+          'safeJourneys'
+        ),
+
         where(
           'status',
           '==',
           'active'
         ),
-        limit(1)
+
+        limit(
+          1
+        )
       );
 
     const snapshot =
       await getDocs(
-        activeJourneyQuery
+        activeQuery
       );
 
-    if (snapshot.empty) {
+    if (
+      snapshot.empty
+    ) {
       return null;
     }
 
     const document =
       snapshot.docs[0];
 
-    const data =
-      document.data();
-
-    const arrivalTimestamp =
-      data.expectedArrivalTime;
-
-    const createdTimestamp =
-      data.createdAt;
-
-    const lastCheckInTimestamp =
-      data.lastCheckInAt;
-
-    const completedTimestamp =
-      data.completedAt;
-
-    const cancelledTimestamp =
-      data.cancelledAt;
-
-    if (
-      !(
-        arrivalTimestamp instanceof
-        Timestamp
-      )
-    ) {
-      throw new SafeJourneyError(
-        'firestore-error',
-        'The active journey contains invalid arrival information.'
-      );
-    }
-
-    const createdAt =
-      createdTimestamp instanceof
-      Timestamp
-        ? createdTimestamp.toDate()
-        : new Date();
-
-    return {
-      id:
-        document.id,
-
-      userId:
-        currentUser.uid,
-
-      destination:
-        typeof data.destination ===
-        'string'
-          ? data.destination
-          : 'Unknown destination',
-
-      destinationLocation:
-        data.destinationLocation ??
-        null,
-
-      currentLocation: {
-        latitude:
-          Number(
-            data.currentLocation
-              ?.latitude
-          ),
-
-        longitude:
-          Number(
-            data.currentLocation
-              ?.longitude
-          ),
-      },
-
-      expectedArrivalTime:
-        arrivalTimestamp.toDate(),
-
-      trustedContactIds:
-        Array.isArray(
-          data.trustedContactIds
-        )
-          ? data.trustedContactIds
-          : [],
-
-      checkInIntervalMinutes:
-        data.checkInIntervalMinutes,
-
-      shareJourney:
-        Boolean(
-          data.shareJourney
-        ),
-
-      status:
-        'active',
-
-      createdAt,
-
-      lastCheckInAt:
-        lastCheckInTimestamp instanceof
-        Timestamp
-          ? lastCheckInTimestamp.toDate()
-          : null,
-
-      completedAt:
-        completedTimestamp instanceof
-        Timestamp
-          ? completedTimestamp.toDate()
-          : null,
-
-      cancelledAt:
-        cancelledTimestamp instanceof
-        Timestamp
-          ? cancelledTimestamp.toDate()
-          : null,
-    };
-  } catch (error) {
+    return parseJourney(
+      document.id,
+      user.uid,
+      document.data()
+    );
+  } catch (
+    error
+  ) {
     if (
       error instanceof
       SafeJourneyError
@@ -437,19 +513,15 @@ export async function getActiveSafeJourney():
 }
 
 export async function recordSafeJourneyCheckIn(
-  journeyId: string
+  journeyId:
+    string
 ): Promise<void> {
-  const currentUser =
-    firebaseAuth.currentUser;
+  const user =
+    getAuthenticatedUser();
 
-  if (!currentUser) {
-    throw new SafeJourneyError(
-      'not-authenticated',
-      'You must be signed in to check in.'
-    );
-  }
-
-  if (!journeyId.trim()) {
+  if (
+    !journeyId.trim()
+  ) {
     throw new SafeJourneyError(
       'journey-not-active',
       'No active Safe Journey was found.'
@@ -457,17 +529,15 @@ export async function recordSafeJourneyCheckIn(
   }
 
   try {
-    const journeyRef =
+    await updateDoc(
       doc(
         firestore,
         'users',
-        currentUser.uid,
+        user.uid,
         'safeJourneys',
         journeyId
-      );
+      ),
 
-    await updateDoc(
-      journeyRef,
       {
         lastCheckInAt:
           serverTimestamp(),
@@ -479,7 +549,9 @@ export async function recordSafeJourneyCheckIn(
           'active',
       }
     );
-  } catch (error) {
+  } catch (
+    error
+  ) {
     console.error(
       'Safe Journey check-in failed:',
       error
@@ -493,19 +565,15 @@ export async function recordSafeJourneyCheckIn(
 }
 
 export async function completeSafeJourney(
-  journeyId: string
+  journeyId:
+    string
 ): Promise<void> {
-  const currentUser =
-    firebaseAuth.currentUser;
+  const user =
+    getAuthenticatedUser();
 
-  if (!currentUser) {
-    throw new SafeJourneyError(
-      'not-authenticated',
-      'You must be signed in to complete your journey.'
-    );
-  }
-
-  if (!journeyId.trim()) {
+  if (
+    !journeyId.trim()
+  ) {
     throw new SafeJourneyError(
       'journey-not-active',
       'No active Safe Journey was found.'
@@ -513,17 +581,15 @@ export async function completeSafeJourney(
   }
 
   try {
-    const journeyRef =
+    await updateDoc(
       doc(
         firestore,
         'users',
-        currentUser.uid,
+        user.uid,
         'safeJourneys',
         journeyId
-      );
+      ),
 
-    await updateDoc(
-      journeyRef,
       {
         status:
           'completed',
@@ -535,7 +601,9 @@ export async function completeSafeJourney(
           serverTimestamp(),
       }
     );
-  } catch (error) {
+  } catch (
+    error
+  ) {
     console.error(
       'Safe Journey completion failed:',
       error
@@ -549,19 +617,15 @@ export async function completeSafeJourney(
 }
 
 export async function cancelSafeJourney(
-  journeyId: string
+  journeyId:
+    string
 ): Promise<void> {
-  const currentUser =
-    firebaseAuth.currentUser;
+  const user =
+    getAuthenticatedUser();
 
-  if (!currentUser) {
-    throw new SafeJourneyError(
-      'not-authenticated',
-      'You must be signed in to cancel your journey.'
-    );
-  }
-
-  if (!journeyId.trim()) {
+  if (
+    !journeyId.trim()
+  ) {
     throw new SafeJourneyError(
       'journey-not-active',
       'No active Safe Journey was found.'
@@ -569,17 +633,15 @@ export async function cancelSafeJourney(
   }
 
   try {
-    const journeyRef =
+    await updateDoc(
       doc(
         firestore,
         'users',
-        currentUser.uid,
+        user.uid,
         'safeJourneys',
         journeyId
-      );
+      ),
 
-    await updateDoc(
-      journeyRef,
       {
         status:
           'cancelled',
@@ -591,7 +653,9 @@ export async function cancelSafeJourney(
           serverTimestamp(),
       }
     );
-  } catch (error) {
+  } catch (
+    error
+  ) {
     console.error(
       'Safe Journey cancellation failed:',
       error
@@ -604,176 +668,81 @@ export async function cancelSafeJourney(
   }
 }
 
+/**
+ * Returns every journey state.
+ *
+ * Active journeys are placed first so Journey History can also
+ * work as a quick resume screen.
+ */
 export async function getSafeJourneyHistory():
-  Promise<StoredSafeJourney[]> {
-  const currentUser =
-    firebaseAuth.currentUser;
-
-  if (!currentUser) {
-    throw new SafeJourneyError(
-      'not-authenticated',
-      'You must be signed in to view your journey history.'
-    );
-  }
+  Promise<
+    StoredSafeJourney[]
+  > {
+  const user =
+    getAuthenticatedUser();
 
   try {
-    const journeysRef =
-      collection(
-        firestore,
-        'users',
-        currentUser.uid,
-        'safeJourneys'
-      );
-
-    const historyQuery =
-      query(
-        journeysRef,
-        where(
-          'status',
-          'in',
-          [
-            'completed',
-            'cancelled',
-          ]
+    const snapshot =
+      await getDocs(
+        collection(
+          firestore,
+          'users',
+          user.uid,
+          'safeJourneys'
         )
       );
 
-    const snapshot =
-      await getDocs(
-        historyQuery
-      );
+    return snapshot.docs
+      .map(
+        document =>
+          parseJourney(
+            document.id,
+            user.uid,
+            document.data()
+          )
+      )
+      .sort(
+        (
+          first,
+          second
+        ) => {
+          if (
+            first.status ===
+              'active' &&
+            second.status !==
+              'active'
+          ) {
+            return -1;
+          }
 
-    const journeys =
-      snapshot.docs.map(
-        document => {
-          const data =
-            document.data();
+          if (
+            second.status ===
+              'active' &&
+            first.status !==
+              'active'
+          ) {
+            return 1;
+          }
 
-          const expectedArrivalTimestamp =
-            data.expectedArrivalTime;
+          const firstDate =
+            first.completedAt ??
+            first.cancelledAt ??
+            first.createdAt;
 
-          const createdTimestamp =
-            data.createdAt;
+          const secondDate =
+            second.completedAt ??
+            second.cancelledAt ??
+            second.createdAt;
 
-          const lastCheckInTimestamp =
-            data.lastCheckInAt;
-
-          const completedTimestamp =
-            data.completedAt;
-
-          const cancelledTimestamp =
-            data.cancelledAt;
-
-          const status =
-            data.status ===
-            'cancelled'
-              ? 'cancelled'
-              : 'completed';
-
-          return {
-            id:
-              document.id,
-
-            userId:
-              currentUser.uid,
-
-            destination:
-              typeof data.destination ===
-              'string'
-                ? data.destination
-                : 'Unknown destination',
-
-            destinationLocation:
-              data.destinationLocation ??
-              null,
-
-            currentLocation: {
-              latitude:
-                Number(
-                  data.currentLocation
-                    ?.latitude
-                ),
-
-              longitude:
-                Number(
-                  data.currentLocation
-                    ?.longitude
-                ),
-            },
-
-            expectedArrivalTime:
-              expectedArrivalTimestamp instanceof
-              Timestamp
-                ? expectedArrivalTimestamp.toDate()
-                : new Date(),
-
-            trustedContactIds:
-              Array.isArray(
-                data.trustedContactIds
-              )
-                ? data.trustedContactIds
-                : [],
-
-            checkInIntervalMinutes:
-              data.checkInIntervalMinutes,
-
-            shareJourney:
-              Boolean(
-                data.shareJourney
-              ),
-
-            status,
-
-            createdAt:
-              createdTimestamp instanceof
-              Timestamp
-                ? createdTimestamp.toDate()
-                : new Date(),
-
-            lastCheckInAt:
-              lastCheckInTimestamp instanceof
-              Timestamp
-                ? lastCheckInTimestamp.toDate()
-                : null,
-
-            completedAt:
-              completedTimestamp instanceof
-              Timestamp
-                ? completedTimestamp.toDate()
-                : null,
-
-            cancelledAt:
-              cancelledTimestamp instanceof
-              Timestamp
-                ? cancelledTimestamp.toDate()
-                : null,
-          } satisfies StoredSafeJourney;
+          return (
+            secondDate.getTime() -
+            firstDate.getTime()
+          );
         }
       );
-
-    return journeys.sort(
-      (a, b) => {
-        const firstTime =
-          (
-            a.completedAt ??
-            a.cancelledAt ??
-            a.createdAt
-          ).getTime();
-
-        const secondTime =
-          (
-            b.completedAt ??
-            b.cancelledAt ??
-            b.createdAt
-          ).getTime();
-
-        return (
-          secondTime -
-          firstTime
-        );
-      }
-    );
-  } catch (error) {
+  } catch (
+    error
+  ) {
     if (
       error instanceof
       SafeJourneyError

@@ -1,1180 +1,1918 @@
-import { useFocusEffect, useRouter } from 'expo-router';
+import { Ionicons } from '@expo/vector-icons';
 
-import { collection, getDocs } from 'firebase/firestore';
-
-import { useCallback, useEffect, useRef, useState } from 'react';
-
-import SosLifecycleActions from '@/src/components/sos/SosLifecycleActions';
+import * as Location from 'expo-location';
 
 import {
+  type Href,
+  useRouter,
+} from 'expo-router';
 
+import {
+  useEffect,
+  useState,
+} from 'react';
+
+import {
   ActivityIndicator,
-
   Alert,
-
   Linking,
-
   Pressable,
-
   ScrollView,
-
+  Share,
   StyleSheet,
-
   Text,
-
   View,
-
 } from 'react-native';
 
-import { SafeAreaView } from 'react-native-safe-area-context';
-
-import SosEmergencyMessage from '@/src/components/sos/SosEmergencyMessage';
-import TrustedContactSelector from '@/src/components/TrustedContactSelector';
-
-import SosHoldButton from '@/src/components/sos/SosHoldButton';
-
-import { firestore } from '@/src/config/firebase';
-
-import { useAuth } from '@/src/context/AuthContext';
+import {
+  SafeAreaView,
+} from 'react-native-safe-area-context';
 
 import {
+  Brand,
+} from '@/constants/brand';
 
-  createSosPreparation,
-
-  retrieveSosLocation,
-
-  type PreparedSos,
-
-  type SosTrustedContact,
-
-} from '@/src/services/sos-preparation-service';
+import ScreenBackButton from '@/src/components/navigation/ScreenBackButton';
 
 import {
+  reverseGeocodeLocation,
+} from '@/src/services/location-address-service';
 
-  getActiveSosRequest,
+import {
+  createSosEvent,
+  finishSosEvent,
+} from '@/src/services/sos-service';
 
-  saveActiveSosRequest,
+import {
+  subscribeToTrustedContacts,
+} from '@/src/services/trusted-contact-service';
 
-  updateActiveSosLocation,
+import type {
+  TrustedContact,
+} from '@/src/types/trusted-contact';
 
-  type ActiveSosRequest,
+type SosState =
+  | 'ready'
+  | 'active'
+  | 'resolved'
+  | 'cancelled';
 
-} from '@/src/services/sos-request-service';
+type LocationStatus =
+  | 'idle'
+  | 'loading'
+  | 'available'
+  | 'unavailable';
 
-type ContentProps = {
-
-  userId: string | null;
-
-  registered: boolean;
-
-  authLoading: boolean;
-
+type EmergencyLocation = {
+  latitude: number;
+  longitude: number;
+  address: string | null;
 };
 
 export default function SosScreen() {
-
-  const { user, loading } = useAuth();
-
-  return (
-
-    <SosContent
-
-      key={user?.uid ?? 'signed-out'}
-
-      userId={user?.uid ?? null}
-
-      registered={Boolean(user && !user.isAnonymous)}
-
-      authLoading={loading}
-
-    />
-
-  );
-
-}
-
-function SosContent({
-
-  userId,
-
-  registered,
-
-  authLoading,
-
-}: ContentProps) {
-
-  const router = useRouter();
-
-  const [contacts, setContacts] = useState<SosTrustedContact[]>([]);
-
-  const [selectedIds, setSelectedIds] = useState<string[]>([]);
-
-  const [contactsLoading, setContactsLoading] = useState(false);
-
-  const [contactsError, setContactsError] = useState<string | null>(null);
-
-  const [contactsRefresh, setContactsRefresh] = useState(0);
-
-  const [request, setRequest] = useState<ActiveSosRequest | null>(null);
-
-  const [preparation, setPreparation] = useState<PreparedSos | null>(null);
-
-  const [loadingRequest, setLoadingRequest] = useState(true);
-
-  const [loadError, setLoadError] = useState<string | null>(null);
-
-  const [actionError, setActionError] = useState<string | null>(null);
-
-  const [actionMessage, setActionMessage] = useState<string | null>(null);
-
-  const [busyLabel, setBusyLabel] = useState<string | null>(null);
-  const [closureMessage, setClosureMessage] = useState<string | null>(null);
-
-  const epoch = useRef(0);
-
-  const busy = useRef(false);
-
-  const loadRequest = useCallback(async () => {
-
-    if (busy.current) return;
-
-    if (authLoading) {
-
-      setLoadingRequest(true);
-
-      return;
-
-    }
-
-    if (!registered || !userId) {
-
-      setLoadingRequest(false);
-
-      setLoadError(null);
-
-      return;
-
-    }
-
-    const token = ++epoch.current;
-
-    setLoadingRequest(true);
-
-    setLoadError(null);
-
-    try {
-
-      const saved = await getActiveSosRequest(userId);
-
-      if (epoch.current !== token) return;
-
-      setRequest(saved);
-
-      if (saved) {
-
-        setPreparation(saved.preparation);
-
-        setActionError(null);
-
-      }
-
-    } catch {
-
-      if (epoch.current !== token) return;
-
-      setLoadError(
-
-        'Could not check your active SOS request. Check your connection and retry. Sharing and emergency calling remain available.',
-
-      );
-
-    } finally {
-
-      if (epoch.current === token) {
-
-        setLoadingRequest(false);
-
-      }
-
-    }
-
-  }, [authLoading, registered, userId]);
-
-  useEffect(() => {
-    return () => {
-      epoch.current += 1;
-    };
-  }, []);
-
-  useFocusEffect(
-
-    useCallback(() => {
-
-      void loadRequest();
-
-      return () => {
-
-        epoch.current += 1;
-
-      };
-
-    }, [loadRequest]),
-
-  );
-
-  useEffect(() => {
-
-    let active = true;
-
-    if (authLoading || !registered || !userId) {
-
-      setContacts([]);
-
-      setContactsLoading(false);
-
-      return;
-
-    }
-
-    setContactsLoading(true);
-
-    setContactsError(null);
-
-    getDocs(collection(firestore, 'users', userId, 'trustedContacts'))
-
-      .then((snapshot) => {
-
-        if (!active) return;
-
-        const items: SosTrustedContact[] = snapshot.docs
-
-          .map((document) => {
-
-            const data = document.data();
-
-            return {
-
-              id: document.id,
-
-              name: typeof data.name === 'string' ? data.name.trim() : '',
-
-              relationship:
-
-                typeof data.relationship === 'string'
-
-                  ? data.relationship.trim()
-
-                  : '',
-
-              phoneNumber:
-
-                typeof data.phoneNumber === 'string'
-
-                  ? data.phoneNumber.trim()
-
-                  : '',
-
-            };
-
-          })
-
-          .filter((contact) => contact.name.length > 0);
-
-        setContacts(items);
-
-      })
-
-      .catch(() => {
-
-        if (active) {
-
-          setContactsError(
-
-            'Could not load contacts. You can continue without contacts or retry.',
-
-          );
-
-        }
-
-      })
-
-      .finally(() => {
-
-        if (active) setContactsLoading(false);
-
-      });
-
-    return () => {
-
-      active = false;
-
-    };
-
-  }, [authLoading, registered, userId, contactsRefresh]);
-
-  const savePreparation = async (draft: PreparedSos) => {
-
-    if (!userId || !registered || busy.current) return;
-
-    busy.current = true;
-
-    const token = epoch.current;
-
-    setActionError(null);
-
-    setActionMessage(null);
-
-    setBusyLabel('Retrieving current location...');
-
-    try {
-
-      const complete: PreparedSos = draft.location
-
-        ? draft
-
-        : {
-
-            ...draft,
-
-            location: await retrieveSosLocation(),
-
-          };
-
-      if (epoch.current !== token) return;
-
-      setPreparation(complete);
-
-      setBusyLabel('Saving simulation request to Firestore...');
-
-      const saved = await saveActiveSosRequest(userId, complete);
-
-      if (epoch.current !== token) return;
-
-      setRequest(saved);
-
-      setPreparation(saved.preparation);
-
-      setActionMessage('Active simulation request saved in Firestore.');
-
-    } catch {
-
-      if (epoch.current !== token) return;
-
-      setActionError(
-
-        'Could not confirm the SOS save. Your prepared details remain available here. Check your connection and retry saving or reload the request.',
-
-      );
-
-    } finally {
-
-      busy.current = false;
-
-      if (epoch.current === token) {
-
-        setBusyLabel(null);
-
-      }
-
-    }
-
-  };
-
-  const handleConfirm = () => {
-
-    if (
-
-      busy.current ||
-
-      preparation ||
-
-      request ||
-
-      loadingRequest ||
-
-      loadError
-
-    ) {
-
-      return;
-
-    }
-
-    const selected = contacts.filter((contact) =>
-
-      selectedIds.includes(contact.id),
-
+  const router =
+    useRouter();
+
+  const [
+    state,
+    setState,
+  ] =
+    useState<SosState>(
+      'ready'
     );
 
-    setClosureMessage(null);
+  const [
+    eventId,
+    setEventId,
+  ] =
+    useState<string | null>(
+      null
+    );
 
-    const draft = createSosPreparation(selected);
+  const [
+    contacts,
+    setContacts,
+  ] =
+    useState<TrustedContact[]>(
+      []
+    );
 
-    setPreparation(draft);
+  const [
+    location,
+    setLocation,
+  ] =
+    useState<EmergencyLocation | null>(
+      null
+    );
 
-    void savePreparation(draft);
+  const [
+    locationStatus,
+    setLocationStatus,
+  ] =
+    useState<LocationStatus>(
+      'idle'
+    );
 
-  };
-
-  const handleUpdateLocation = async () => {
-
-    if (!request || !userId || busy.current) return;
-
-    busy.current = true;
-
-    const token = epoch.current;
-
-    setActionError(null);
-
-    setActionMessage(null);
-
-    setBusyLabel('Retrieving updated location...');
-
+  /*
+   * Load the user's already-saved trusted contacts.
+   *
+   * SOS does not force the user to choose contacts during
+   * an emergency. Saved contacts are immediately available.
+   */
+  useEffect(() => {
     try {
+      const unsubscribe =
+        subscribeToTrustedContacts(
+          setContacts,
 
-      const location = await retrieveSosLocation();
-
-      if (epoch.current !== token) return;
-
-      if (!location.coordinates) {
-
-        setActionError(
-
-          `${location.message} Your previously saved location has been retained.`,
-
+          () => {
+            setContacts(
+              []
+            );
+          }
         );
 
+      return unsubscribe;
+    } catch (
+      error
+    ) {
+      console.warn(
+        'Trusted contacts unavailable in SOS:',
+        error
+      );
+
+      setContacts(
+        []
+      );
+    }
+  }, []);
+
+  /*
+   * Location is intentionally retrieved independently from
+   * SOS activation.
+   *
+   * GPS must never block emergency calling or the active state.
+   */
+  const retrieveLocation =
+    async () => {
+      try {
+        setLocationStatus(
+          'loading'
+        );
+
+        let permission =
+          await Location.getForegroundPermissionsAsync();
+
+        if (
+          permission.status !==
+          'granted'
+        ) {
+          permission =
+            await Location.requestForegroundPermissionsAsync();
+        }
+
+        if (
+          permission.status !==
+          'granted'
+        ) {
+          setLocation(
+            null
+          );
+
+          setLocationStatus(
+            'unavailable'
+          );
+
+          return;
+        }
+
+        const servicesEnabled =
+          await Location.hasServicesEnabledAsync();
+
+        if (
+          !servicesEnabled
+        ) {
+          setLocation(
+            null
+          );
+
+          setLocationStatus(
+            'unavailable'
+          );
+
+          return;
+        }
+
+        const position =
+          await Location.getCurrentPositionAsync(
+            {
+              accuracy:
+                Location.Accuracy
+                  .Balanced,
+            }
+          );
+
+        const coordinate = {
+          latitude:
+            position.coords
+              .latitude,
+
+          longitude:
+            position.coords
+              .longitude,
+        };
+
+        const address =
+          await reverseGeocodeLocation(
+            coordinate
+          );
+
+        setLocation({
+          ...coordinate,
+          address,
+        });
+
+        setLocationStatus(
+          'available'
+        );
+      } catch (
+        error
+      ) {
+        console.warn(
+          'SOS location failed:',
+          error
+        );
+
+        setLocation(
+          null
+        );
+
+        setLocationStatus(
+          'unavailable'
+        );
+      }
+    };
+
+  /*
+   * One deliberate long press activates SOS.
+   *
+   * The visual state changes immediately.
+   * Location retrieval and Firestore logging happen separately
+   * so they do not delay emergency actions.
+   */
+  const activate =
+    async () => {
+      if (
+        state ===
+        'active'
+      ) {
         return;
-
       }
 
-      setBusyLabel("Saving updated location...");
-
-      const updated = await updateActiveSosLocation(
-        userId,
-        location,
-        request.preparation.activatedAt,
+      setState(
+        'active'
       );
 
-      if (epoch.current !== token) return;
+      void retrieveLocation();
 
-      setRequest(updated);
+      try {
+        const id =
+          await createSosEvent();
 
-      setPreparation(updated.preparation);
+        setEventId(
+          id
+        );
+      } catch (
+        error
+      ) {
+        /*
+         * Firestore failure must not prevent the user from
+         * accessing emergency actions.
+         */
+        console.warn(
+          'SOS event could not be stored:',
+          error
+        );
+      }
+    };
 
-      setActionMessage(
+  /*
+   * Opens the device dialler.
+   *
+   * SafeHer does not claim that a call was automatically placed.
+   */
+  const callNumber =
+    async (
+      number: string
+    ) => {
+      try {
+        await Linking.openURL(
+          `tel:${number}`
+        );
+      } catch {
+        Alert.alert(
+          'Dialler unavailable',
+          `Please call ${number} manually.`
+        );
+      }
+    };
 
-        'Location updated in Firestore. The original activation time is unchanged.',
+  /*
+   * Builds an emergency message and lets the user choose
+   * the destination using the device's native share interface.
+   */
+  const shareEmergency =
+    async () => {
+      const locationLine =
+        location
+          ? `Location: ${
+              location.address ??
+              'Current GPS position'
+            }\nhttps://www.google.com/maps?q=${location.latitude},${location.longitude}`
+          : locationStatus ===
+              'loading'
+            ? 'Location is still being retrieved.'
+            : 'Location is not currently available.';
 
+      const contactLine =
+        contacts.length >
+        0
+          ? `Saved trusted contacts: ${contacts
+              .map(
+                contact =>
+                  contact.name
+              )
+              .join(', ')}`
+          : 'No saved trusted contacts are available.';
+
+      try {
+        await Share.share({
+          title:
+            'SafeHer Emergency Message',
+
+          message:
+            `I need help. This emergency message was prepared by the SafeHer academic prototype.\n\n` +
+            `${locationLine}\n\n` +
+            `${contactLine}\n\n` +
+            'Please contact me and, if necessary, contact emergency services.',
+        });
+      } catch (
+        error
+      ) {
+        console.error(
+          'Emergency share failed:',
+          error
+        );
+
+        Alert.alert(
+          'Could not open sharing',
+          'Please try again.'
+        );
+      }
+    };
+
+  /*
+   * Changes the same SOS event to either resolved or cancelled.
+   *
+   * The event is retained rather than deleted.
+   */
+  const finish =
+    async (
+      result:
+        | 'resolved'
+        | 'cancelled'
+    ) => {
+      setState(
+        result
       );
 
-    } catch {
-
-      if (epoch.current !== token) return;
-
-      setActionError(
-
-        'Could not confirm the location update. The previously displayed location is retained. Reload the request to check its saved state.',
-
-      );
-
-    } finally {
-
-      busy.current = false;
-
-      if (epoch.current === token) {
-
-        setBusyLabel(null);
-
+      if (
+        !eventId
+      ) {
+        return;
       }
 
-    }
+      try {
+        await finishSosEvent(
+          eventId,
+          result
+        );
+      } catch (
+        error
+      ) {
+        console.warn(
+          'SOS status could not be stored:',
+          error
+        );
+      }
+    };
 
-  };
-
-  const openLink = async (url: string) => {
-
-    try {
-
-      await Linking.openURL(url);
-
-    } catch {
-
-      Alert.alert(
-
-        'Could not open this action',
-
-        url.startsWith('tel:')
-
-          ? 'Open your phone dialer manually and enter 119.'
-
-          : 'Use the location coordinates displayed on this screen.',
-
+  const reopenSos =
+    () => {
+      setState(
+        'ready'
       );
 
-    }
+      setEventId(
+        null
+      );
 
-  };
+      setLocation(
+        null
+      );
 
-  const canSelectContacts =
-
-    !preparation && !request && !busyLabel && !loadingRequest && !loadError;
+      setLocationStatus(
+        'idle'
+      );
+    };
 
   return (
+    <SafeAreaView
+      style={
+        styles.safeArea
+      }
+      edges={[
+        'top',
+      ]}
+    >
+      <ScrollView
+        contentContainerStyle={
+          styles.content
+        }
+        showsVerticalScrollIndicator={
+          false
+        }
+      >
+        <ScreenBackButton
+          label="Home"
+        />
 
-    <SafeAreaView style={styles.safeArea} edges={['top']}>
-
-      <ScrollView contentContainerStyle={styles.content}>
-
-        <Pressable
-
-          style={styles.action}
-
-          onPress={() => {
-
-            if (router.canGoBack()) router.back();
-
-            else router.replace('/');
-
-          }}
-
-          accessibilityRole="button"
-
+        {/* Header */}
+        <View
+          style={
+            styles.header
+          }
         >
-
-          <Text style={styles.actionText}>Back</Text>
-
-        </Pressable>
-
-        <Text style={styles.title}>SOS assistance</Text>
-
-        {closureMessage && !request && (
-          <View style={styles.card}>
-            <Text accessibilityLiveRegion="polite" style={styles.body}>
-              {closureMessage}
-            </Text>
-          </View>
-        )}
-
-        <Text style={styles.body}>
-
-          SafeHer records a prototype simulation request. It does not
-
-          automatically notify contacts or emergency services.
-
-        </Text>
-
-        {loadingRequest ? (
-
-          <View style={styles.card}>
-
-            <ActivityIndicator color="#A92F61" />
-
-            <Text style={styles.body}>Checking active SOS request...</Text>
-
-          </View>
-
-        ) : loadError ? (
-
-          <View style={styles.card}>
-
-            <Text style={styles.error}>{loadError}</Text>
-
-            <Pressable
-
-              style={styles.action}
-
-              onPress={() => void loadRequest()}
-
-              accessibilityRole="button"
-
+          <View
+            style={{
+              flex: 1,
+            }}
+          >
+            <Text
+              style={
+                styles.title
+              }
             >
+              SOS Assistance
+            </Text>
 
-              <Text style={styles.actionText}>Retry loading SOS</Text>
+            <View
+              style={
+                styles.prototypePill
+              }
+            >
+              <View
+                style={
+                  styles.prototypeDot
+                }
+              />
 
-            </Pressable>
-
+              <Text
+                style={
+                  styles.prototypeText
+                }
+              >
+                Academic prototype
+              </Text>
+            </View>
           </View>
 
-        ) : !registered ? (
-
-          <View style={styles.card}>
-
-            <Text style={styles.body}>
-
-              Sign in with a registered account to save a prototype SOS
-
-              request. Emergency calling remains available.
-
-            </Text>
-
+          <View
+            style={
+              styles.headerIconWrap
+            }
+          >
+            <Ionicons
+              name="alert-circle"
+              size={
+                28
+              }
+              color="#C83B4D"
+            />
           </View>
+        </View>
 
-        ) : !preparation && !request ? (
+        {/* SOS activation */}
+        {state ===
+        'ready' ? (
+          <View
+            style={
+              styles.hero
+            }
+          >
+            <View
+              style={
+                styles.sosRingOuter
+              }
+            >
+              <Pressable
+                style={({
+                  pressed,
+                }) => [
+                  styles.sosButton,
 
-          <View style={styles.hero}>
+                  pressed &&
+                    styles.sosPressed,
+                ]}
+                onLongPress={
+                  activate
+                }
+                delayLongPress={
+                  1200
+                }
+                accessibilityRole="button"
+                accessibilityLabel="Press and hold to activate SOS"
+              >
+                <Ionicons
+                  name="alert-circle"
+                  size={
+                    46
+                  }
+                  color="#FFFFFF"
+                />
 
-            <SosHoldButton onConfirm={handleConfirm} />
-
-          </View>
-
-        ) : null}
-
-        {preparation && (
-
-          <View style={styles.card}>
-
-            <Text style={styles.cardTitle}>
-
-              {request
-
-                ? 'Active SOS - simulation'
-
-                : 'SOS preparation - save not confirmed'}
-
-            </Text>
-
-            <Text style={styles.body}>
-
-              {request
-
-                ? 'Status: active. This simulation request is saved in Firestore.'
-
-                : 'These details are prepared locally. An active Firestore save has not been confirmed.'}
-
-            </Text>
-
-            <Text selectable style={styles.body}>
-
-              Activated: {new Date(preparation.activatedAt).toLocaleString()}
-
-            </Text>
-
-            <Text selectable style={styles.small}>
-
-              Recorded time: {preparation.activatedAt}
-
-            </Text>
-
-            <Text style={styles.cardTitle}>Selected contacts</Text>
-
-            {preparation.selectedContacts.length === 0 ? (
-
-              <Text style={styles.body}>None selected.</Text>
-
-            ) : (
-
-              preparation.selectedContacts.map((contact) => (
-
-                <Text key={contact.id} style={styles.body}>
-
-                  {contact.name}
-
-                  {contact.relationship ? ` - ${contact.relationship}` : ''}
-
-                  {'\n'}
-
-                  {contact.phoneNumber || 'No phone number saved'}
-
+                <Text
+                  style={
+                    styles.sosText
+                  }
+                >
+                  HOLD SOS
                 </Text>
+              </Pressable>
+            </View>
 
-              ))
-
-            )}
-
-            <Text style={styles.cardTitle}>Saved location</Text>
-
-            <Text style={styles.body}>
-
-              {preparation.location?.message ??
-
-                'Waiting for the location result...'}
-
+            <Text
+              style={
+                styles.instruction
+              }
+            >
+              Press and hold once to activate.
+              Emergency-call buttons remain
+              available even before GPS is ready.
             </Text>
+          </View>
+        ) : (
+          <View
+            style={[
+              styles.stateCard,
 
-            {preparation.location?.coordinates && (
+              state ===
+                'active' &&
+                styles.activeState,
+            ]}
+          >
+            <View
+              style={[
+                styles.stateIconWrap,
 
-              <Text selectable style={styles.body}>
+                state ===
+                  'active'
+                  ? styles.stateIconActive
+                  : styles.stateIconIdle,
+              ]}
+            >
+              <Ionicons
+                name={
+                  state ===
+                  'active'
+                    ? 'radio-outline'
+                    : 'checkmark-circle-outline'
+                }
+                size={
+                  22
+                }
+                color={
+                  state ===
+                  'active'
+                    ? '#B42318'
+                    : '#287550'
+                }
+              />
+            </View>
 
-                Latitude: {preparation.location.coordinates.latitude}
-
-                {'\n'}
-
-                Longitude: {preparation.location.coordinates.longitude}
-
+            <View
+              style={{
+                flex: 1,
+              }}
+            >
+              <Text
+                style={
+                  styles.stateTitle
+                }
+              >
+                {state ===
+                'active'
+                  ? 'SOS active'
+                  : state ===
+                      'resolved'
+                    ? 'SOS resolved'
+                    : 'SOS cancelled'}
               </Text>
 
-            )}
-
-            {preparation.location?.mapsLink && (
-
-              <>
-
-                <Text selectable style={styles.small}>
-
-                  {preparation.location.mapsLink}
-
-                </Text>
-
-                <Pressable
-
-                  style={styles.action}
-
-                  onPress={() => {
-
-                    const link = preparation.location?.mapsLink;
-
-                    if (link) void openLink(link);
-
-                  }}
-
-                  accessibilityRole="button"
-
-                >
-
-                  <Text style={styles.actionText}>
-
-                    Open location in Google Maps
-
-                  </Text>
-
-                </Pressable>
-
-              </>
-
-            )}
-
-            {busyLabel ? (
-
-              <View style={styles.loadingRow}>
-
-                <ActivityIndicator color="#A92F61" />
-
-                <Text style={styles.body}>{busyLabel}</Text>
-
-              </View>
-
-            ) : request ? (
-
-              <Pressable
-
-                style={styles.button}
-
-                onPress={() => void handleUpdateLocation()}
-
-                accessibilityRole="button"
-
+              <Text
+                style={
+                  styles.stateText
+                }
               >
+                {state ===
+                'active'
+                  ? 'Emergency actions are available below. Location is being handled separately.'
+                  : 'No prototype SOS action is currently active.'}
+              </Text>
+            </View>
+          </View>
+        )}
 
-                <Text style={styles.buttonText}>Update Location</Text>
-
-              </Pressable>
-
-            ) : (
-
-              <Pressable
-
-                style={styles.button}
-
-                onPress={() => void savePreparation(preparation)}
-
-                accessibilityRole="button"
-
-              >
-
-                <Text style={styles.buttonText}>Retry saving SOS</Text>
-
-              </Pressable>
-
-            )}
-
-            {actionError ? (
-
-              <Text style={styles.error}>{actionError}</Text>
-
-            ) : null}
-
-            {actionMessage ? (
-
-              <Text style={styles.body}>{actionMessage}</Text>
-
-            ) : null}
-
-            <Pressable
-
-              style={styles.action}
-
-              onPress={() => void loadRequest()}
-
-              disabled={Boolean(busyLabel)}
-
-              accessibilityRole="button"
-
-              accessibilityState={{ disabled: Boolean(busyLabel) }}
-
+        {/* Emergency calls */}
+        <View
+          style={
+            styles.card
+          }
+        >
+          <View
+            style={
+              styles.cardHeaderRow
+            }
+          >
+            <View
+              style={
+                styles.cardIconWrap
+              }
             >
-
-              <Text style={styles.actionText}>Reload saved request</Text>
-
-            </Pressable>
-
-            <Text style={styles.small}>
-
-              Location is a snapshot, not live tracking. No message
-
-              delivery or emergency response is confirmed.
-
-            </Text>
-
-          </View>
-
-        )}
-
-        {preparation && (
-
-          <SosEmergencyMessage
-
-            activation={preparation}
-
-            isRetrievingLocation={Boolean(busyLabel)}
-
-          />
-
-        )}
-
-        {request && userId && (
-          <SosLifecycleActions
-            key={request.preparation.activatedAt}
-            userId={userId}
-            activatedAt={request.preparation.activatedAt}
-            disabled={Boolean(busyLabel) || loadingRequest}
-            onBusyChange={(isBusy) => {
-              busy.current = isBusy;
-              setBusyLabel(isBusy ? 'Updating SOS status...' : null);
-            }}
-            onClosed={(status) => {
-              epoch.current += 1;
-              busy.current = false;
-
-              setRequest(null);
-              setPreparation(null);
-              setSelectedIds([]);
-              setBusyLabel(null);
-              setActionError(null);
-              setActionMessage(null);
-              setLoadError(null);
-              setLoadingRequest(false);
-
-              setClosureMessage(
-                status === 'cancelled'
-                  ? 'Prototype SOS cancelled. The cancellation status and time were saved. No SOS request is active.'
-                  : 'Prototype SOS resolved. The resolution status and time were saved. No SOS request is active.',
-              );
-            }}
-          />
-        )}
-
-        {!preparation && !request && (
-
-          <View style={styles.card}>
-
-            <Text style={styles.cardTitle}>Trusted contacts</Text>
-
-            {contactsLoading ? (
-
-              <ActivityIndicator color="#A92F61" />
-
-            ) : contactsError ? (
-
-              <>
-
-                <Text style={styles.body}>{contactsError}</Text>
-
-                <Pressable
-
-                  style={styles.action}
-
-                  onPress={() => setContactsRefresh((current) => current + 1)}
-
-                  accessibilityRole="button"
-
-                >
-
-                  <Text style={styles.actionText}>Retry contacts</Text>
-
-                </Pressable>
-
-              </>
-
-            ) : (
-              <TrustedContactSelector
-                contacts={contacts}
-                selectedIds={selectedIds}
-                onSelectionChange={setSelectedIds}
-                selectionMode="multiple"
-                disabled={!canSelectContacts}
-                emptyMessage="No saved contacts available. Contacts are optional; emergency calling remains available."
+              <Ionicons
+                name="call-outline"
+                size={
+                  17
+                }
+                color={
+                  Brand.burgundy
+                }
               />
-            )}
+            </View>
 
-            <Text style={styles.small}>
-
-              Current location will be requested after you hold SOS and
-
-              confirm. Denial does not block emergency calling.
-
+            <Text
+              style={
+                styles.cardTitle
+              }
+            >
+              Emergency calls
             </Text>
-
           </View>
 
-        )}
-
-        <View style={styles.card}>
-
-          <Text style={styles.cardTitle}>Emergency services</Text>
-
-          <Text style={styles.body}>
-
-            Open the phone dialer for Sri Lanka Police emergency
-
-            assistance. Location, contacts, and Firestore access are
-
-            not required for this action.
-
+          <Text
+            style={
+              styles.body
+            }
+          >
+            These buttons open the phone
+            dialler. SafeHer does not place
+            the call automatically.
           </Text>
 
           <Pressable
+            style={({
+              pressed,
+            }) => [
+              styles.policeButton,
 
-            style={styles.button}
-
-            onPress={() => void openLink('tel:119')}
-
+              pressed &&
+                styles.pressed,
+            ]}
+            onPress={() =>
+              void callNumber(
+                '119'
+              )
+            }
             accessibilityRole="button"
-
-            accessibilityLabel="Open Police dialer for 119"
-
+            accessibilityLabel="Open Police emergency dialler for 119"
           >
+            <Ionicons
+              name="call"
+              size={
+                20
+              }
+              color="#FFFFFF"
+            />
 
-            <Text style={styles.buttonText}>
-
-              Open Police dialer - 119
-
+            <Text
+              style={
+                styles.callText
+              }
+            >
+              Police Emergency · 119
             </Text>
-
           </Pressable>
 
+          <Pressable
+            style={({
+              pressed,
+            }) => [
+              styles.ambulanceButton,
+
+              pressed &&
+                styles.pressed,
+            ]}
+            onPress={() =>
+              void callNumber(
+                '1990'
+              )
+            }
+            accessibilityRole="button"
+            accessibilityLabel="Open Ambulance dialler for 1990"
+          >
+            <Ionicons
+              name="medkit"
+              size={
+                20
+              }
+              color="#FFFFFF"
+            />
+
+            <Text
+              style={
+                styles.callText
+              }
+            >
+              Ambulance · 1990
+            </Text>
+          </Pressable>
         </View>
 
-        <View style={styles.disclaimer}>
+        {/* Location */}
+        <View
+          style={
+            styles.card
+          }
+        >
+          <View
+            style={
+              styles.cardHeaderRow
+            }
+          >
+            <View
+              style={
+                styles.cardIconWrap
+              }
+            >
+              <Ionicons
+                name="location-outline"
+                size={
+                  17
+                }
+                color={
+                  Brand.burgundy
+                }
+              />
+            </View>
 
-          <Text style={styles.small}>
+            <Text
+              style={
+                styles.cardTitle
+              }
+            >
+              Location
+            </Text>
+          </View>
 
-            Academic prototype only. An active simulation record does
+          {locationStatus ===
+          'loading' ? (
+            <View
+              style={
+                styles.row
+              }
+            >
+              <ActivityIndicator
+                color={
+                  Brand.burgundy
+                }
+              />
 
-            not mean that help has been dispatched or anyone has been
+              <Text
+                style={
+                  styles.body
+                }
+              >
+                Getting current location...
+              </Text>
+            </View>
+          ) : location ? (
+            <>
+              <Text
+                style={
+                  styles.locationAddress
+                }
+              >
+                {location.address ??
+                  'Current GPS location'}
+              </Text>
 
-            notified. Do not rely on SafeHer as your only way to get help.
+              <Text
+                style={
+                  styles.body
+                }
+              >
+                {location.latitude.toFixed(
+                  5
+                )}
+                ,{' '}
+                {location.longitude.toFixed(
+                  5
+                )}
+              </Text>
+            </>
+          ) : (
+            <Text
+              style={
+                styles.body
+              }
+            >
+              {locationStatus ===
+              'unavailable'
+                ? 'Location is unavailable. You can still call emergency services or share an emergency message.'
+                : 'Location will be requested after SOS activation.'}
+            </Text>
+          )}
+        </View>
 
+        {/* Trusted contacts */}
+        <View
+          style={
+            styles.card
+          }
+        >
+          <View
+            style={
+              styles.cardHeaderRow
+            }
+          >
+            <View
+              style={
+                styles.cardIconWrap
+              }
+            >
+              <Ionicons
+                name="people-outline"
+                size={
+                  17
+                }
+                color={
+                  Brand.burgundy
+                }
+              />
+            </View>
+
+            <Text
+              style={
+                styles.cardTitle
+              }
+            >
+              Trusted contacts
+            </Text>
+
+            <Pressable
+              style={({
+                pressed,
+              }) => [
+                styles.changeButton,
+
+                pressed &&
+                  styles.pressed,
+              ]}
+              onPress={() =>
+                router.push(
+                  '/trusted-contacts' as Href
+                )
+              }
+              accessibilityRole="button"
+              accessibilityLabel="Manage trusted contacts"
+            >
+              <Text
+                style={
+                  styles.changeText
+                }
+              >
+                Change
+              </Text>
+            </Pressable>
+          </View>
+
+          {contacts.length ===
+          0 ? (
+            <Text
+              style={
+                styles.body
+              }
+            >
+              No saved trusted contacts are
+              available. Add trusted contacts
+              once and they will be ready here.
+            </Text>
+          ) : (
+            contacts.map(
+              contact => (
+                <Pressable
+                  key={
+                    contact.id
+                  }
+                  style={({
+                    pressed,
+                  }) => [
+                    styles.contactRow,
+
+                    pressed &&
+                      styles.pressed,
+                  ]}
+                  onPress={() =>
+                    void callNumber(
+                      contact.phone
+                    )
+                  }
+                  accessibilityRole="button"
+                  accessibilityLabel={`Call ${contact.name}`}
+                >
+                  <View
+                    style={
+                      styles.contactAvatar
+                    }
+                  >
+                    <Ionicons
+                      name="person"
+                      size={
+                        16
+                      }
+                      color={
+                        Brand.burgundy
+                      }
+                    />
+                  </View>
+
+                  <View
+                    style={{
+                      flex: 1,
+                    }}
+                  >
+                    <Text
+                      style={
+                        styles.contactName
+                      }
+                    >
+                      {
+                        contact.name
+                      }
+                    </Text>
+
+                    <Text
+                      style={
+                        styles.contactMeta
+                      }
+                    >
+                      {contact.relationship ||
+                        'Trusted contact'}
+
+                      {contact.phone
+                        ? ` · ${contact.phone}`
+                        : ''}
+                    </Text>
+                  </View>
+
+                  <View
+                    style={
+                      styles.callCircle
+                    }
+                  >
+                    <Ionicons
+                      name="call"
+                      size={
+                        16
+                      }
+                      color={
+                        Brand.burgundy
+                      }
+                    />
+                  </View>
+                </Pressable>
+              )
+            )
+          )}
+        </View>
+
+        {/* Share emergency */}
+        <Pressable
+          style={({
+            pressed,
+          }) => [
+            styles.shareButton,
+
+            pressed &&
+              styles.pressed,
+          ]}
+          onPress={() =>
+            void shareEmergency()
+          }
+          accessibilityRole="button"
+          accessibilityLabel="Share emergency message"
+        >
+          <Ionicons
+            name="share-social-outline"
+            size={
+              20
+            }
+            color="#FFFFFF"
+          />
+
+          <Text
+            style={
+              styles.shareText
+            }
+          >
+            Share Emergency Message
           </Text>
+        </Pressable>
 
+        {/* Cancel / Resolve */}
+        {state ===
+        'active' ? (
+          <View
+            style={
+              styles.actionRow
+            }
+          >
+            <Pressable
+              style={({
+                pressed,
+              }) => [
+                styles.cancelButton,
+
+                pressed &&
+                  styles.pressed,
+              ]}
+              onPress={() =>
+                void finish(
+                  'cancelled'
+                )
+              }
+              accessibilityRole="button"
+              accessibilityLabel="Cancel active SOS"
+            >
+              <Ionicons
+                name="close-circle-outline"
+                size={
+                  17
+                }
+                color="#B42318"
+              />
+
+              <Text
+                style={
+                  styles.cancelText
+                }
+              >
+                Cancel SOS
+              </Text>
+            </Pressable>
+
+            <Pressable
+              style={({
+                pressed,
+              }) => [
+                styles.resolveButton,
+
+                pressed &&
+                  styles.pressed,
+              ]}
+              onPress={() =>
+                void finish(
+                  'resolved'
+                )
+              }
+              accessibilityRole="button"
+              accessibilityLabel="Resolve active SOS"
+            >
+              <Ionicons
+                name="checkmark-circle-outline"
+                size={
+                  17
+                }
+                color="#FFFFFF"
+              />
+
+              <Text
+                style={
+                  styles.resolveText
+                }
+              >
+                Resolve
+              </Text>
+            </Pressable>
+          </View>
+        ) : null}
+
+        {(state ===
+          'resolved' ||
+          state ===
+            'cancelled') ? (
+          <Pressable
+            style={({
+              pressed,
+            }) => [
+              styles.resetButton,
+
+              pressed &&
+                styles.pressed,
+            ]}
+            onPress={
+              reopenSos
+            }
+          >
+            <Ionicons
+              name="refresh-outline"
+              size={
+                18
+              }
+              color={
+                Brand.burgundy
+              }
+            />
+
+            <Text
+              style={
+                styles.resetText
+              }
+            >
+              Return to SOS
+            </Text>
+          </Pressable>
+        ) : null}
+
+        {/* Disclaimer */}
+        <View
+          style={
+            styles.disclaimer
+          }
+        >
+          <View
+            style={
+              styles.disclaimerIconWrap
+            }
+          >
+            <Ionicons
+              name="information-circle-outline"
+              size={
+                18
+              }
+              color="#74552C"
+            />
+          </View>
+
+          <Text
+            style={
+              styles.disclaimerText
+            }
+          >
+            SafeHer is an academic prototype.
+            It cannot verify message delivery,
+            emergency dispatch, or that help is
+            on the way. Do not rely on SafeHer
+            as your only method of getting
+            emergency assistance.
+          </Text>
         </View>
-
       </ScrollView>
-
     </SafeAreaView>
-
   );
-
 }
 
-const styles = StyleSheet.create({
+const styles =
+  StyleSheet.create({
+    safeArea: {
+      flex: 1,
 
-  safeArea: {
+      backgroundColor:
+        Brand.cream,
+    },
 
-    flex: 1,
+    content: {
+      paddingHorizontal: 20,
 
-    backgroundColor: '#FFF8FB',
+      paddingTop: 12,
 
-  },
+      paddingBottom: 44,
 
-  content: {
+      gap: 12,
+    },
 
-    paddingHorizontal: 20,
+    header: {
+      flexDirection:
+        'row',
 
-    paddingBottom: 36,
+      alignItems:
+        'center',
 
-    gap: 12,
+      gap: 12,
 
-  },
+      marginBottom: 4,
+    },
 
-  title: {
+    headerIconWrap: {
+      width: 50,
 
-    color: '#32252B',
+      height: 50,
 
-    fontSize: 28,
+      borderRadius: 16,
 
-    fontWeight: '900',
+      alignItems:
+        'center',
 
-  },
+      justifyContent:
+        'center',
 
-  hero: {
+      backgroundColor:
+        '#FDECEC',
 
-    alignItems: 'center',
+      borderWidth: 1,
 
-    paddingVertical: 20,
+      borderColor:
+        '#F8CFCB',
+    },
 
-  },
+    title: {
+      color:
+        Brand.ink,
 
-  card: {
+      fontSize: 26,
 
-    padding: 16,
+      fontWeight:
+        '900',
 
-    borderRadius: 16,
+      letterSpacing:
+        -0.4,
+    },
 
-    backgroundColor: '#FFFFFF',
+    prototypePill: {
+      flexDirection:
+        'row',
 
-    gap: 10,
+      alignItems:
+        'center',
 
-  },
+      gap: 5,
 
-  cardTitle: {
+      alignSelf:
+        'flex-start',
 
-    color: '#32252B',
+      marginTop: 6,
 
-    fontSize: 17,
+      paddingHorizontal: 9,
 
-    fontWeight: '800',
+      paddingVertical: 3,
 
-  },
+      borderRadius: 9,
 
-  body: {
+      backgroundColor:
+        '#FDECEC',
+    },
 
-    color: '#5D4B53',
+    prototypeDot: {
+      width: 6,
 
-    fontSize: 14,
+      height: 6,
 
-    lineHeight: 21,
+      borderRadius: 3,
 
-  },
+      backgroundColor:
+        '#B42318',
+    },
 
-  small: {
+    prototypeText: {
+      color:
+        '#B42318',
 
-    color: '#5D4B53',
+      fontSize: 11,
 
-    fontSize: 12,
+      fontWeight:
+        '900',
 
-    lineHeight: 18,
+      letterSpacing:
+        0.2,
+    },
 
-  },
+    hero: {
+      alignItems:
+        'center',
 
-  error: {
+      paddingVertical:
+        22,
+    },
 
-    color: '#9E2637',
+    sosRingOuter: {
+      padding: 14,
 
-    fontSize: 14,
+      borderRadius: 110,
 
-    lineHeight: 21,
+      backgroundColor:
+        'rgba(200, 59, 77, 0.12)',
+    },
 
-  },
+    sosButton: {
+      width: 176,
 
-  loadingRow: {
+      height: 176,
 
-    flexDirection: 'row',
+      borderRadius: 88,
 
-    alignItems: 'center',
+      backgroundColor:
+        '#C83B4D',
 
-    gap: 10,
+      alignItems:
+        'center',
 
-  },
+      justifyContent:
+        'center',
 
-  contact: {
+      shadowColor:
+        '#C83B4D',
 
-    flexDirection: 'row',
+      shadowOffset: {
+        width: 0,
+        height: 8,
+      },
 
-    alignItems: 'center',
+      shadowOpacity:
+        0.4,
 
-    gap: 12,
+      shadowRadius: 16,
 
-    padding: 12,
+      elevation: 8,
 
-    borderWidth: 1,
+      borderWidth: 4,
 
-    borderColor: '#E5DCE1',
+      borderColor:
+        'rgba(255, 255, 255, 0.35)',
+    },
 
-    borderRadius: 12,
+    sosPressed: {
+      transform: [
+        {
+          scale: 0.96,
+        },
+      ],
+    },
 
-  },
+    sosText: {
+      marginTop: 6,
 
-  selectedContact: {
+      color:
+        '#FFFFFF',
 
-    borderColor: '#A92F61',
+      fontSize: 22,
 
-    backgroundColor: '#FFF0F6',
+      fontWeight:
+        '900',
 
-  },
+      letterSpacing: 1,
+    },
 
-  contactDetails: {
+    instruction: {
+      marginTop: 18,
 
-    flex: 1,
+      maxWidth: 310,
 
-  },
+      color:
+        Brand.ink,
 
-  action: {
+      textAlign:
+        'center',
 
-    alignSelf: 'flex-start',
+      lineHeight: 20,
 
-    minHeight: 44,
+      fontWeight:
+        '700',
 
-    justifyContent: 'center',
+      fontSize: 13,
+    },
 
-    paddingVertical: 8,
+    stateCard: {
+      flexDirection:
+        'row',
 
-  },
+      alignItems:
+        'center',
 
-  actionText: {
+      gap: 12,
 
-    color: '#A92F61',
+      padding: 15,
 
-    fontSize: 14,
+      borderRadius: 18,
 
-    fontWeight: '700',
+      backgroundColor:
+        Brand.white,
 
-  },
+      borderWidth: 1,
 
-  button: {
+      borderColor:
+        Brand.line,
+    },
 
-    minHeight: 48,
+    activeState: {
+      borderColor:
+        '#FDA29B',
 
-    padding: 12,
+      backgroundColor:
+        '#FEF3F2',
+    },
 
-    alignItems: 'center',
+    stateIconWrap: {
+      width: 40,
 
-    justifyContent: 'center',
+      height: 40,
 
-    borderRadius: 12,
+      borderRadius: 13,
 
-    backgroundColor: '#A92F61',
+      alignItems:
+        'center',
 
-  },
+      justifyContent:
+        'center',
+    },
 
-  buttonText: {
+    stateIconActive: {
+      backgroundColor:
+        '#FDECEC',
+    },
 
-    color: '#FFFFFF',
+    stateIconIdle: {
+      backgroundColor:
+        '#E8F5ED',
+    },
 
-    fontSize: 14,
+    stateTitle: {
+      color:
+        Brand.ink,
 
-    fontWeight: '700',
+      fontWeight:
+        '900',
 
-  },
+      fontSize: 14,
+    },
 
-  disclaimer: {
+    stateText: {
+      marginTop: 3,
 
-    padding: 16,
+      color:
+        Brand.muted,
 
-    borderRadius: 14,
+      fontSize: 12,
 
-    backgroundColor: '#FFF3D6',
+      lineHeight: 17,
+    },
 
-  },
+    card: {
+      padding: 16,
 
-});
+      borderRadius: 18,
+
+      backgroundColor:
+        Brand.white,
+
+      borderWidth: 1,
+
+      borderColor:
+        Brand.line,
+
+      shadowColor:
+        '#4E1026',
+
+      shadowOffset: {
+        width: 0,
+        height: 2,
+      },
+
+      shadowOpacity:
+        0.04,
+
+      shadowRadius: 6,
+
+      elevation: 1,
+    },
+
+    cardHeaderRow: {
+      flexDirection:
+        'row',
+
+      alignItems:
+        'center',
+
+      gap: 9,
+
+      marginBottom: 8,
+    },
+
+    cardIconWrap: {
+      width: 30,
+
+      height: 30,
+
+      borderRadius: 10,
+
+      alignItems:
+        'center',
+
+      justifyContent:
+        'center',
+
+      backgroundColor:
+        Brand.blush,
+    },
+
+    cardTitle: {
+      flex: 1,
+
+      color:
+        Brand.ink,
+
+      fontSize: 15.5,
+
+      fontWeight:
+        '800',
+    },
+
+    body: {
+      color:
+        Brand.muted,
+
+      fontSize: 12.5,
+
+      lineHeight: 18,
+    },
+
+    row: {
+      flexDirection:
+        'row',
+
+      alignItems:
+        'center',
+
+      gap: 8,
+    },
+
+    policeButton: {
+      minHeight: 54,
+
+      flexDirection:
+        'row',
+
+      alignItems:
+        'center',
+
+      justifyContent:
+        'center',
+
+      gap: 8,
+
+      marginTop: 14,
+
+      borderRadius: 14,
+
+      backgroundColor:
+        '#9B2D3F',
+    },
+
+    ambulanceButton: {
+      minHeight: 54,
+
+      flexDirection:
+        'row',
+
+      alignItems:
+        'center',
+
+      justifyContent:
+        'center',
+
+      gap: 8,
+
+      marginTop: 9,
+
+      borderRadius: 14,
+
+      backgroundColor:
+        '#287550',
+    },
+
+    callText: {
+      color:
+        '#FFFFFF',
+
+      fontWeight:
+        '900',
+
+      fontSize: 14.5,
+    },
+
+    locationAddress: {
+      color:
+        Brand.ink,
+
+      fontWeight:
+        '800',
+
+      lineHeight: 19,
+
+      marginBottom: 4,
+
+      fontSize: 13.5,
+    },
+
+    changeButton: {
+      paddingHorizontal: 10,
+
+      paddingVertical: 5,
+
+      borderRadius: 9,
+
+      backgroundColor:
+        Brand.blush,
+    },
+
+    changeText: {
+      color:
+        Brand.burgundy,
+
+      fontWeight:
+        '900',
+
+      fontSize: 12,
+    },
+
+    contactRow: {
+      flexDirection:
+        'row',
+
+      alignItems:
+        'center',
+
+      gap: 10,
+
+      paddingVertical: 10,
+
+      borderBottomWidth: 1,
+
+      borderBottomColor:
+        Brand.line,
+    },
+
+    contactAvatar: {
+      width: 38,
+
+      height: 38,
+
+      borderRadius: 19,
+
+      alignItems:
+        'center',
+
+      justifyContent:
+        'center',
+
+      backgroundColor:
+        Brand.blush,
+    },
+
+    contactName: {
+      color:
+        Brand.ink,
+
+      fontWeight:
+        '800',
+
+      fontSize: 13.5,
+    },
+
+    contactMeta: {
+      marginTop: 3,
+
+      color:
+        Brand.muted,
+
+      fontSize: 11.5,
+    },
+
+    callCircle: {
+      width: 36,
+
+      height: 36,
+
+      borderRadius: 18,
+
+      alignItems:
+        'center',
+
+      justifyContent:
+        'center',
+
+      backgroundColor:
+        Brand.blush,
+    },
+
+    shareButton: {
+      minHeight: 56,
+
+      flexDirection:
+        'row',
+
+      alignItems:
+        'center',
+
+      justifyContent:
+        'center',
+
+      gap: 8,
+
+      borderRadius: 15,
+
+      backgroundColor:
+        Brand.burgundy,
+    },
+
+    shareText: {
+      color:
+        '#FFFFFF',
+
+      fontWeight:
+        '900',
+
+      fontSize: 15,
+    },
+
+    actionRow: {
+      flexDirection:
+        'row',
+
+      gap: 10,
+    },
+
+    cancelButton: {
+      flex: 1,
+
+      minHeight: 50,
+
+      flexDirection:
+        'row',
+
+      gap: 6,
+
+      alignItems:
+        'center',
+
+      justifyContent:
+        'center',
+
+      borderWidth: 1.5,
+
+      borderColor:
+        '#B42318',
+
+      borderRadius: 14,
+
+      backgroundColor:
+        Brand.white,
+    },
+
+    cancelText: {
+      color:
+        '#B42318',
+
+      fontWeight:
+        '800',
+
+      fontSize: 13.5,
+    },
+
+    resolveButton: {
+      flex: 1,
+
+      minHeight: 50,
+
+      flexDirection:
+        'row',
+
+      gap: 6,
+
+      alignItems:
+        'center',
+
+      justifyContent:
+        'center',
+
+      borderRadius: 14,
+
+      backgroundColor:
+        '#287550',
+    },
+
+    resolveText: {
+      color:
+        '#FFFFFF',
+
+      fontWeight:
+        '900',
+
+      fontSize: 13.5,
+    },
+
+    resetButton: {
+      minHeight: 48,
+
+      flexDirection:
+        'row',
+
+      alignItems:
+        'center',
+
+      justifyContent:
+        'center',
+
+      gap: 7,
+
+      borderWidth: 1,
+
+      borderColor:
+        Brand.burgundy,
+
+      borderRadius: 14,
+
+      backgroundColor:
+        Brand.white,
+    },
+
+    resetText: {
+      color:
+        Brand.burgundy,
+
+      fontWeight:
+        '800',
+    },
+
+    disclaimer: {
+      flexDirection:
+        'row',
+
+      gap: 10,
+
+      marginTop: 8,
+
+      padding: 14,
+
+      borderRadius: 16,
+
+      backgroundColor:
+        '#FFF3D6',
+
+      borderWidth: 1,
+
+      borderColor:
+        '#F5DCAE',
+    },
+
+    disclaimerIconWrap: {
+      width: 28,
+
+      height: 28,
+
+      borderRadius: 9,
+
+      alignItems:
+        'center',
+
+      justifyContent:
+        'center',
+
+      backgroundColor:
+        '#FFFFFF',
+    },
+
+    disclaimerText: {
+      flex: 1,
+
+      color:
+        '#74552C',
+
+      fontSize: 12,
+
+      lineHeight: 18,
+    },
+
+    pressed: {
+      opacity: 0.82,
+    },
+  });

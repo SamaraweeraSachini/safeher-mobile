@@ -5,7 +5,7 @@ import {
   query,
   serverTimestamp,
   Timestamp,
-  Unsubscribe,
+  type Unsubscribe,
   where,
 } from 'firebase/firestore';
 
@@ -25,41 +25,80 @@ import type {
   IncidentStatus,
 } from '@/src/types/incident';
 
-const ACTIVE_INCIDENT_LIMIT = 50;
-const WITHDRAWAL_NOTICE_PREFIX = 'safeher-withdrawn:';
+const ACTIVE_INCIDENT_LIMIT =
+  50;
 
+const WITHDRAWAL_NOTICE_PREFIX =
+  'safeher-withdrawn:';
+
+let submissionInProgress =
+  false;
+
+/*
+ * Withdrawal notices are kept in Firestore so every client,
+ * including guests, can determine that an incident should no
+ * longer appear on the public map.
+ */
 export function withdrawnReportId(
-  data: Record<string, unknown>
+  data:
+    Record<
+      string,
+      unknown
+    >
 ): string | null {
-  const storedId = data.withdrawnIncidentId;
+  const storedId =
+    data.withdrawnIncidentId;
 
   if (
-    data.recordType === 'withdrawal' &&
-    typeof storedId === 'string' &&
-    storedId.trim().length > 0
+    data.recordType ===
+      'withdrawal' &&
+    typeof storedId ===
+      'string' &&
+    storedId
+      .trim()
+      .length >
+      0
   ) {
     return storedId.trim();
   }
 
+  /*
+   * Backwards-compatible fallback for withdrawal records
+   * stored using the special description prefix.
+   */
   if (
-    typeof data.description === 'string' &&
-    data.description.startsWith(WITHDRAWAL_NOTICE_PREFIX)
+    typeof data.description ===
+      'string' &&
+    data.description.startsWith(
+      WITHDRAWAL_NOTICE_PREFIX
+    )
   ) {
-    const reportId = data.description
-      .slice(WITHDRAWAL_NOTICE_PREFIX.length)
-      .trim();
+    const reportId =
+      data.description
+        .slice(
+          WITHDRAWAL_NOTICE_PREFIX.length
+        )
+        .trim();
 
-    return reportId.length > 0 ? reportId : null;
+    return reportId.length >
+      0
+      ? reportId
+      : null;
   }
 
   return null;
 }
 
-export function withdrawalNoticeDescription(reportId: string): string {
+/*
+ * Creates the legacy-compatible withdrawal marker text used
+ * by report-withdrawal functionality elsewhere in SafeHer.
+ */
+export function withdrawalNoticeDescription(
+  reportId:
+    string
+): string {
   return `${WITHDRAWAL_NOTICE_PREFIX}${reportId}`;
 }
-
-let submissionInProgress = false;
 
 export class IncidentSubmissionError extends Error {
   code:
@@ -69,81 +108,93 @@ export class IncidentSubmissionError extends Error {
     | 'firestore-error';
 
   constructor(
-    code: IncidentSubmissionError['code'],
-    message: string
-  ) {
-    super(message);
+    code:
+      IncidentSubmissionError['code'],
 
-    this.name = 'IncidentSubmissionError';
-    this.code = code;
+    message:
+      string
+  ) {
+    super(
+      message
+    );
+
+    this.name =
+      'IncidentSubmissionError';
+
+    this.code =
+      code;
   }
 }
 
 export class IncidentRetrievalError extends Error {
-  code: 'firestore-error';
+  code =
+    'firestore-error' as const;
 
-  constructor(message: string) {
-    super(message);
+  constructor(
+    message:
+      string
+  ) {
+    super(
+      message
+    );
 
-    this.name = 'IncidentRetrievalError';
-    this.code = 'firestore-error';
+    this.name =
+      'IncidentRetrievalError';
   }
 }
 
 function coordinatesAreValid(
-  latitude: number,
-  longitude: number
+  latitude:
+    number,
+
+  longitude:
+    number
 ): boolean {
   return (
-    Number.isFinite(latitude) &&
-    Number.isFinite(longitude) &&
-    latitude >= -90 &&
-    latitude <= 90 &&
-    longitude >= -180 &&
-    longitude <= 180
+    Number.isFinite(
+      latitude
+    ) &&
+    Number.isFinite(
+      longitude
+    ) &&
+    latitude >=
+      -90 &&
+    latitude <=
+      90 &&
+    longitude >=
+      -180 &&
+    longitude <=
+      180
   );
 }
 
-function validateCoordinates(
-  latitude: number,
-  longitude: number
-): void {
-  if (
-    !coordinatesAreValid(
-      latitude,
-      longitude
-    )
-  ) {
-    throw new IncidentSubmissionError(
-      'invalid-location',
-      'The selected incident location is invalid. Please select your current location again.'
-    );
-  }
-}
-
 function convertCoordinates(
-  value: unknown
+  value:
+    unknown
 ): IncidentCoordinates | null {
   if (
-    typeof value !== 'object' ||
-    value === null
+    typeof value !==
+      'object' ||
+    value ===
+      null
   ) {
     return null;
   }
 
-  const coordinates = value as {
-    latitude?: unknown;
-    longitude?: unknown;
-  };
+  const coordinates =
+    value as {
+      latitude?:
+        unknown;
+
+      longitude?:
+        unknown;
+    };
 
   if (
-    typeof coordinates.latitude !== 'number' ||
-    typeof coordinates.longitude !== 'number'
-  ) {
-    return null;
-  }
-
-  if (
+    typeof coordinates.latitude !==
+      'number' ||
+    typeof coordinates.longitude !==
+      'number' ||
     !coordinatesAreValid(
       coordinates.latitude,
       coordinates.longitude
@@ -162,66 +213,126 @@ function convertCoordinates(
 }
 
 function convertCreatedAt(
-  value: unknown
-): Timestamp | null | undefined {
+  value:
+    unknown
+):
+  | Timestamp
+  | null
+  | undefined {
   if (
-    value === null ||
-    value === undefined
+    value ===
+      null ||
+    value ===
+      undefined
   ) {
     return null;
   }
 
-  if (value instanceof Timestamp) {
-    return value;
-  }
-
-  return undefined;
+  return value instanceof
+    Timestamp
+    ? value
+    : undefined;
 }
 
-/**
- * Converts unknown Firestore data into the shared Incident model.
- * Invalid documents return null instead of crashing the application.
+/*
+ * Reads the human-readable address saved with newer reports.
+ * Older reports without an address still remain valid.
  */
-export function convertIncidentDocument(
-  id: string,
-  data: Record<string, unknown>
+function getAddress(
+  data:
+    Record<
+      string,
+      unknown
+    >
+): string | null {
+  return (
+    typeof data.address ===
+      'string' &&
+    data.address
+      .trim()
+      .length >
+      0
+      ? data.address.trim()
+      : null
+  );
+}
+
+const REPORT_STATUSES:
+  IncidentStatus[] = [
+    'active',
+    'under-review',
+    'resolved',
+    'removed',
+  ];
+
+function isReportStatus(
+  value:
+    unknown
+): value is IncidentStatus {
+  return (
+    typeof value ===
+      'string' &&
+    REPORT_STATUSES.includes(
+      value as IncidentStatus
+    )
+  );
+}
+
+/*
+ * Converts one Firestore document into SafeHer's Incident
+ * model. `requireActive` is used for map incidents while
+ * My Reports can display the full report lifecycle.
+ */
+function convertDocument(
+  id:
+    string,
+
+  data:
+    Record<
+      string,
+      unknown
+    >,
+
+  requireActive:
+    boolean
 ): Incident | null {
-  if (!id) {
-    console.warn(
-      'An incident document was ignored because its ID was missing.'
-    );
-
-    return null;
-  }
-
+  /*
+   * Withdrawal marker documents are metadata, not actual
+   * incident reports, so never convert them into map/report
+   * cards.
+   */
   if (
-    !isIncidentCategoryId(
-      data.type
+    withdrawnReportId(
+      data
     )
   ) {
-    console.warn(
-      `Incident ${id} was ignored because its type is unsupported.`
-    );
-
-    return null;
-  }
-
-  if (data.status !== 'active') {
-    console.warn(
-      `Incident ${id} was ignored because it is not active.`
-    );
-
     return null;
   }
 
   if (
+    !id ||
+    !isIncidentCategoryId(
+      data.type
+    ) ||
+    !isReportStatus(
+      data.status
+    ) ||
+    (
+      requireActive &&
+      data.status !==
+        'active'
+    ) ||
     typeof data.description !==
-    'string'
+      'string' ||
+    typeof data.anonymous !==
+      'boolean' ||
+    typeof data.creatorUid !==
+      'string' ||
+    data.creatorUid
+      .trim()
+      .length ===
+      0
   ) {
-    console.warn(
-      `Incident ${id} was ignored because its description is invalid.`
-    );
-
     return null;
   }
 
@@ -230,126 +341,210 @@ export function convertIncidentDocument(
       data.coordinates
     );
 
-  if (!coordinates) {
-    console.warn(
-      `Incident ${id} was ignored because its coordinates are invalid.`
-    );
-
-    return null;
-  }
-
-  if (
-    typeof data.anonymous !==
-    'boolean'
-  ) {
-    console.warn(
-      `Incident ${id} was ignored because its anonymous value is invalid.`
-    );
-
-    return null;
-  }
-
-  if (
-    typeof data.creatorUid !== 'string' ||
-    data.creatorUid.trim().length === 0
-  ) {
-    console.warn(
-      `Incident ${id} was ignored because its creator is invalid.`
-    );
-
-    return null;
-  }
-
   const createdAt =
     convertCreatedAt(
       data.createdAt
     );
 
-  if (createdAt === undefined) {
-    console.warn(
-      `Incident ${id} was ignored because its creation date is invalid.`
-    );
-
+  if (
+    !coordinates ||
+    createdAt ===
+      undefined
+  ) {
     return null;
   }
 
   return {
     id,
-    type: data.type,
+
+    type:
+      data.type,
+
     description:
       data.description.trim(),
+
     coordinates,
+
+    address:
+      getAddress(
+        data
+      ),
+
     anonymous:
       data.anonymous,
-    status: 'active',
+
+    status:
+      data.status,
+
     creatorUid:
       data.creatorUid,
+
     createdAt,
   };
 }
 
-function sortIncidentsByNewest(
-  firstIncident: Incident,
-  secondIncident: Incident
-): number {
-  const firstTime =
-    firstIncident.createdAt
-      ?.toMillis() ?? 0;
-
-  const secondTime =
-    secondIncident.createdAt
-      ?.toMillis() ?? 0;
-
-  return secondTime - firstTime;
-}
-
-/**
- * Removes duplicate incident objects using the Firestore document ID.
- * The newest version of a duplicated document is retained.
+/*
+ * Converts a Firestore document that is expected to represent
+ * an active map incident.
  */
-function removeDuplicateIncidents(
-  incidents: Incident[]
-): Incident[] {
-  const incidentsById =
-    new Map<string, Incident>();
+export function convertIncidentDocument(
+  id:
+    string,
 
-  incidents.forEach(incident => {
-    incidentsById.set(
-      incident.id,
-      incident
-    );
-  });
-
-  return Array.from(
-    incidentsById.values()
+  data:
+    Record<
+      string,
+      unknown
+    >
+): Incident | null {
+  return convertDocument(
+    id,
+    data,
+    true
   );
 }
 
-/**
- * Subscribes to active incidents through a Firestore real-time listener.
+function sortIncidentsByNewest(
+  first:
+    Incident,
+
+  second:
+    Incident
+): number {
+  return (
+    (
+      second.createdAt?.toMillis() ??
+      0
+    ) -
+    (
+      first.createdAt?.toMillis() ??
+      0
+    )
+  );
+}
+
+/*
+ * Removes duplicate incidents by Firestore document ID.
+ */
+function removeDuplicateIncidents(
+  incidents:
+    Incident[]
+): Incident[] {
+  const unique =
+    new Map<
+      string,
+      Incident
+    >();
+
+  incidents.forEach(
+    incident => {
+      unique.set(
+        incident.id,
+        incident
+      );
+    }
+  );
+
+  return Array.from(
+    unique.values()
+  );
+}
+
+/*
+ * Builds the incidents that should actually appear on the
+ * Safety Map.
  *
- * Firestore sends a complete query snapshot whenever an active incident is
- * added, changed or removed. Returning the unsubscribe function allows the
- * React hook to clean up the listener when its screen unmounts.
+ * Withdrawal marker documents are collected first, then the
+ * matching incident IDs are removed from the visible list.
+ */
+export function visibleActiveIncidents(
+  documents:
+    {
+      id:
+        string;
+
+      data:
+        Record<
+          string,
+          unknown
+        >;
+    }[]
+): Incident[] {
+  const removedIds =
+    new Set<string>();
+
+  const incidents:
+    Incident[] = [];
+
+  documents.forEach(
+    document => {
+      const withdrawnIncidentId =
+        withdrawnReportId(
+          document.data
+        );
+
+      if (
+        withdrawnIncidentId
+      ) {
+        removedIds.add(
+          withdrawnIncidentId
+        );
+
+        return;
+      }
+
+      const incident =
+        convertIncidentDocument(
+          document.id,
+          document.data
+        );
+
+      if (
+        incident
+      ) {
+        incidents.push(
+          incident
+        );
+      }
+    }
+  );
+
+  return removeDuplicateIncidents(
+    incidents.filter(
+      incident =>
+        !removedIds.has(
+          incident.id
+        )
+    )
+  ).sort(
+    sortIncidentsByNewest
+  );
+}
+
+/*
+ * Real-time listener used by the Safety Map and other features
+ * that need currently active incident reports.
  */
 export function subscribeToActiveIncidents(
-  onIncidentsChanged: (
-    incidents: Incident[]
-  ) => void,
+  onIncidentsChanged:
+    (
+      incidents:
+        Incident[]
+    ) => void,
 
-  onError: (
-    error: IncidentRetrievalError
-  ) => void
+  onError:
+    (
+      error:
+        IncidentRetrievalError
+    ) => void
 ): Unsubscribe {
-  const incidentsReference =
-    collection(
-      firestore,
-      'incidents'
-    );
-
-  const activeIncidentsQuery =
+  const activeQuery =
     query(
-      incidentsReference,
+      collection(
+        firestore,
+        'incidents'
+      ),
+
       where(
         'status',
         '==',
@@ -357,155 +552,121 @@ export function subscribeToActiveIncidents(
       )
     );
 
-  const unsubscribe =
-    onSnapshot(
-      activeIncidentsQuery,
+  return onSnapshot(
+    activeQuery,
 
-      snapshot => {
-        const activeIncidents =
-          visibleActiveIncidents(
-            snapshot.docs.map((documentSnapshot) => ({
-              id: documentSnapshot.id,
-              data: documentSnapshot.data(),
-            }))
-          ).slice(0, ACTIVE_INCIDENT_LIMIT);
+    snapshot => {
+      const documents =
+        snapshot.docs.map(
+          document => ({
+            id:
+              document.id,
 
-        onIncidentsChanged(
-          activeIncidents
-        );
-      },
-
-      error => {
-        console.error(
-          'Active incident real-time listener error:',
-          error
+            data:
+              document.data(),
+          })
         );
 
-        onError(
-          new IncidentRetrievalError(
-            'SafeHer lost its real-time incident connection. Check your internet connection and try again.'
-          )
+      const incidents =
+        visibleActiveIncidents(
+          documents
+        ).slice(
+          0,
+          ACTIVE_INCIDENT_LIMIT
         );
-      }
-    );
 
-  return unsubscribe;
-}
+      onIncidentsChanged(
+        incidents
+      );
+    },
 
-/**
- * Active map incidents, excluding reports withdrawn for every user.
- * Withdrawal notices stay in the active query so guests can hide those reports too.
- */
-export function visibleActiveIncidents(
-  documents: { id: string; data: Record<string, unknown> }[]
-): Incident[] {
-  const removedIds = new Set<string>();
-  const incidents: Incident[] = [];
+    error => {
+      console.error(
+        'Active incident listener failed:',
+        error
+      );
 
-  documents.forEach((document) => {
-    const withdrawnIncidentId = withdrawnReportId(document.data);
-
-    if (withdrawnIncidentId) {
-      removedIds.add(withdrawnIncidentId);
-      return;
+      onError(
+        new IncidentRetrievalError(
+          'SafeHer lost its real-time incident connection. Check your internet connection and try again.'
+        )
+      );
     }
-
-    const incident = convertIncidentDocument(document.id, document.data);
-
-    if (incident) {
-      incidents.push(incident);
-    }
-  });
-
-  return removeDuplicateIncidents(
-    incidents.filter((incident) => !removedIds.has(incident.id))
-  ).sort(sortIncidentsByNewest);
-}
-
-const REPORT_STATUSES: IncidentStatus[] = [
-  'active',
-  'under-review',
-  'resolved',
-  'removed',
-];
-
-function isReportStatus(value: unknown): value is IncidentStatus {
-  return (
-    typeof value === 'string' &&
-    REPORT_STATUSES.includes(value as IncidentStatus)
   );
 }
 
-function convertUserReportDocument(
-  id: string,
-  data: Record<string, unknown>
-): Incident | null {
-  if (withdrawnReportId(data)) {
-    return null;
-  }
-
-  if (
-    !id ||
-    !isIncidentCategoryId(data.type) ||
-    !isReportStatus(data.status) ||
-    typeof data.description !== 'string' ||
-    typeof data.anonymous !== 'boolean' ||
-    typeof data.creatorUid !== 'string' ||
-    data.creatorUid.trim().length === 0
-  ) {
-    return null;
-  }
-
-  const coordinates = convertCoordinates(data.coordinates);
-  const createdAt = convertCreatedAt(data.createdAt);
-
-  if (!coordinates || createdAt === undefined) {
-    return null;
-  }
-
-  return {
-    id,
-    type: data.type,
-    description: data.description.trim(),
-    coordinates,
-    anonymous: data.anonymous,
-    status: data.status,
-    creatorUid: data.creatorUid,
-    createdAt,
-  };
-}
-
-/**
- * Subscribes to incident reports created by one registered user.
- * Includes every report status, not only reports still shown on the map.
+/*
+ * Subscribes to every incident report created by one user.
+ *
+ * Unlike the Safety Map, this includes active,
+ * under-review, resolved and removed reports.
  */
 export function subscribeToUserReports(
-  userId: string,
-  onReportsChanged: (reports: Incident[]) => void,
-  onError: (error: IncidentRetrievalError) => void
+  userId:
+    string,
+
+  onReportsChanged:
+    (
+      reports:
+        Incident[]
+    ) => void,
+
+  onError:
+    (
+      error:
+        IncidentRetrievalError
+    ) => void
 ): Unsubscribe {
-  const reportsQuery = query(
-    collection(firestore, 'incidents'),
-    where('creatorUid', '==', userId)
-  );
+  const reportsQuery =
+    query(
+      collection(
+        firestore,
+        'incidents'
+      ),
+
+      where(
+        'creatorUid',
+        '==',
+        userId
+      )
+    );
 
   return onSnapshot(
     reportsQuery,
-    (snapshot) => {
-      const reports = snapshot.docs
-        .map((documentSnapshot) =>
-          convertUserReportDocument(
-            documentSnapshot.id,
-            documentSnapshot.data()
-          )
-        )
-        .filter((report): report is Incident => report !== null)
-        .sort(sortIncidentsByNewest);
 
-      onReportsChanged(reports);
+    snapshot => {
+      const reports =
+        snapshot.docs
+          .map(
+            document =>
+              convertDocument(
+                document.id,
+                document.data(),
+                false
+              )
+          )
+          .filter(
+            (
+              report
+            ): report is Incident =>
+              report !==
+              null
+          )
+          .sort(
+            sortIncidentsByNewest
+          );
+
+      onReportsChanged(
+        reports
+      );
     },
-    (error) => {
-      console.error('User report listener error:', error);
+
+    error => {
+      console.error(
+        'User report listener failed:',
+        error
+      );
+
       onError(
         new IncidentRetrievalError(
           'Your reports could not be loaded. Check your connection and try again.'
@@ -515,12 +676,23 @@ export function subscribeToUserReports(
   );
 }
 
+/*
+ * Creates a new community incident report.
+ *
+ * Newer reports store both the GPS coordinates and an optional
+ * reverse-geocoded address. Coordinates remain necessary for
+ * Safety Map and Safe Route calculations.
+ */
 export async function createIncidentReport(
-  input: CreateIncidentInput
+  input:
+    CreateIncidentInput
 ): Promise<string> {
-  if (submissionInProgress) {
+  if (
+    submissionInProgress
+  ) {
     throw new IncidentSubmissionError(
       'duplicate-submission',
+
       'This incident report is already being submitted.'
     );
   }
@@ -528,27 +700,43 @@ export async function createIncidentReport(
   const currentUser =
     firebaseAuth.currentUser;
 
-  if (!currentUser) {
+  if (
+    !currentUser
+  ) {
     throw new IncidentSubmissionError(
       'not-authenticated',
+
       'You must be logged in or continue as a guest before submitting an incident report.'
     );
   }
 
-  validateCoordinates(
-    input.coordinates.latitude,
-    input.coordinates.longitude
-  );
+  if (
+    !coordinatesAreValid(
+      input.coordinates
+        .latitude,
 
-  submissionInProgress = true;
+      input.coordinates
+        .longitude
+    )
+  ) {
+    throw new IncidentSubmissionError(
+      'invalid-location',
+
+      'The selected incident location is invalid.'
+    );
+  }
+
+  submissionInProgress =
+    true;
 
   try {
-    const incidentReference =
+    const document =
       await addDoc(
         collection(
           firestore,
           'incidents'
         ),
+
         {
           type:
             input.type,
@@ -566,6 +754,10 @@ export async function createIncidentReport(
                 .longitude,
           },
 
+          address:
+            input.address?.trim() ||
+            null,
+
           anonymous:
             input.anonymous,
 
@@ -580,25 +772,22 @@ export async function createIncidentReport(
         }
       );
 
-    return incidentReference.id;
-  } catch (error) {
-    if (
-      error instanceof
-      IncidentSubmissionError
-    ) {
-      throw error;
-    }
-
+    return document.id;
+  } catch (
+    error
+  ) {
     console.error(
-      'Firestore incident submission error:',
+      'Incident submission error:',
       error
     );
 
     throw new IncidentSubmissionError(
       'firestore-error',
+
       'SafeHer could not submit your incident report. Check your internet connection and try again.'
     );
   } finally {
-    submissionInProgress = false;
+    submissionInProgress =
+      false;
   }
 }

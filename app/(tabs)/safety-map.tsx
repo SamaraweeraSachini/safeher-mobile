@@ -100,5 +100,6 @@ export default function SafetyMapScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
+    backgroundColor: '#FFF8FB',
   },
 });

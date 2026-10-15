@@ -1,6 +1,9 @@
 import {
+  useFocusEffect,
+} from '@react-navigation/native';
+
+import {
   useCallback,
-  useEffect,
   useState,
 } from 'react';
 
@@ -25,19 +28,27 @@ export function useActiveSafeJourney() {
   const [
     isLoading,
     setIsLoading,
-  ] = useState(true);
+  ] =
+    useState(true);
 
   const [
     error,
     setError,
   ] =
-    useState<string | null>(null);
+    useState<string | null>(
+      null
+    );
 
   const loadJourney =
     useCallback(
       async () => {
-        setIsLoading(true);
-        setError(null);
+        setIsLoading(
+          true
+        );
+
+        setError(
+          null
+        );
 
         try {
           const activeJourney =
@@ -46,36 +57,45 @@ export function useActiveSafeJourney() {
           setJourney(
             activeJourney
           );
-        } catch (loadError) {
-          if (
+        } catch (
+          loadError
+        ) {
+          setError(
             loadError instanceof
-            SafeJourneyError
-          ) {
-            setError(
-              loadError.message
-            );
-          } else {
-            setError(
-              'Active journey could not be loaded.'
-            );
-          }
+              SafeJourneyError
+              ? loadError.message
+              : 'Active journey could not be loaded.'
+          );
         } finally {
-          setIsLoading(false);
+          setIsLoading(
+            false
+          );
         }
       },
       []
     );
 
-  useEffect(() => {
-    loadJourney();
-  }, [loadJourney]);
+  useFocusEffect(
+    useCallback(
+      () => {
+        void loadJourney();
+      },
+      [
+        loadJourney,
+      ]
+    )
+  );
 
   return {
     journey,
+
     isLoading,
+
     error,
+
     retry:
       loadJourney,
+
     refresh:
       loadJourney,
   };

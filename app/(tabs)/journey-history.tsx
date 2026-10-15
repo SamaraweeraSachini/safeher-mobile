@@ -1,7 +1,16 @@
 import { Ionicons } from '@expo/vector-icons';
+
 import {
+  type Href,
   useRouter,
 } from 'expo-router';
+
+import {
+  useEffect,
+  useMemo,
+  useState,
+} from 'react';
+
 import {
   ActivityIndicator,
   Modal,
@@ -11,97 +20,101 @@ import {
   Text,
   View,
 } from 'react-native';
+
 import {
   SafeAreaView,
 } from 'react-native-safe-area-context';
-import {
-  useState,
-} from 'react';
 
 import {
   Brand,
 } from '@/constants/brand';
 
-import {
-  JOURNEY_TRUSTED_CONTACTS,
-} from '@/constants/safe-journey';
+import ScreenBackButton from '@/src/components/navigation/ScreenBackButton';
 
 import {
   useJourneyHistory,
 } from '@/src/hooks/useJourneyHistory';
 
+import {
+  subscribeToTrustedContacts,
+} from '@/src/services/trusted-contact-service';
+
 import type {
   StoredSafeJourney,
 } from '@/src/types/safe-journey';
 
-function formatDateTime(
-  date: Date | null
-): string {
+import type {
+  TrustedContact,
+} from '@/src/types/trusted-contact';
+
+function formatDateTime(date: Date | null): string {
   if (!date) {
     return 'Not available';
   }
 
-  return date.toLocaleString(
-    [],
-    {
-      month: 'short',
-      day: 'numeric',
-      year: 'numeric',
-      hour: '2-digit',
-      minute: '2-digit',
-    }
-  );
+  return date.toLocaleString([], {
+    month: 'short',
+    day: 'numeric',
+    year: 'numeric',
+    hour: '2-digit',
+    minute: '2-digit',
+  });
 }
 
-function formatCoordinate(
-  value: number
-): string {
-  return Number.isFinite(value)
-    ? value.toFixed(5)
-    : 'Unavailable';
+function statusText(status: StoredSafeJourney['status']): string {
+  if (status === 'active') {
+    return 'Active';
+  }
+  if (status === 'completed') {
+    return 'Completed';
+  }
+  return 'Cancelled';
+}
+
+function statusIcon(
+  status: StoredSafeJourney['status']
+): keyof typeof Ionicons.glyphMap {
+  if (status === 'active') {
+    return 'navigate';
+  }
+  if (status === 'completed') {
+    return 'checkmark-circle';
+  }
+  return 'close-circle';
 }
 
 export default function JourneyHistoryScreen() {
-  const router =
-    useRouter();
+  const router = useRouter();
 
-  const {
-    journeys,
-    isLoading,
-    error,
-    retry,
-  } = useJourneyHistory();
+  const { journeys, isLoading, error, retry } = useJourneyHistory();
 
-  const [
-    selectedJourney,
-    setSelectedJourney,
-  ] =
-    useState<StoredSafeJourney | null>(
-      null
-    );
+  const [contacts, setContacts] = useState<TrustedContact[]>([]);
+  const [selectedJourney, setSelectedJourney] =
+    useState<StoredSafeJourney | null>(null);
+
+  useEffect(() => {
+    try {
+      const unsubscribe = subscribeToTrustedContacts(
+        setContacts,
+        () => setContacts([])
+      );
+      return unsubscribe;
+    } catch {
+      setContacts([]);
+    }
+  }, []);
+
+  const contactNames = useMemo(
+    () => new Map(contacts.map(contact => [contact.id, contact.name])),
+    [contacts]
+  );
 
   if (isLoading) {
     return (
-      <SafeAreaView
-        style={styles.safeArea}
-      >
-        <View
-          style={
-            styles.centerState
-          }
-        >
-          <ActivityIndicator
-            size="large"
-            color={
-              Brand.burgundy
-            }
-          />
-
-          <Text
-            style={
-              styles.stateText
-            }
-          >
+      <SafeAreaView style={styles.safeArea}>
+        <View style={styles.center}>
+          <ActivityIndicator size="large" color={Brand.burgundy} />
+          <Text style={styles.helperText}>
             Loading journey history...
           </Text>
         </View>
@@ -109,519 +122,295 @@ export default function JourneyHistoryScreen() {
     );
   }
 
-  if (error) {
-    return (
-      <SafeAreaView
-        style={styles.safeArea}
-      >
-        <View
-          style={
-            styles.centerState
-          }
-        >
-          <Ionicons
-            name="alert-circle-outline"
-            size={40}
-            color={
-              Brand.burgundy
-            }
-          />
-
-          <Text
-            style={
-              styles.stateTitle
-            }
-          >
-            Could not load history
-          </Text>
-
-          <Text
-            style={
-              styles.stateText
-            }
-          >
-            {error}
-          </Text>
-
-          <Pressable
-            style={
-              styles.primaryButton
-            }
-            onPress={
-              retry
-            }
-          >
-            <Text
-              style={
-                styles.primaryButtonText
-              }
-            >
-              Try Again
-            </Text>
-          </Pressable>
-        </View>
-      </SafeAreaView>
-    );
-  }
-
   return (
-    <SafeAreaView
-      style={styles.safeArea}
-      edges={['top']}
-    >
-      <ScrollView
-        contentContainerStyle={
-          styles.content
-        }
-        showsVerticalScrollIndicator={
-          false
-        }
-      >
-        <View
-          style={styles.header}
-        >
-          <Pressable
-            style={
-              styles.backButton
-            }
-            onPress={() =>
-              router.back()
-            }
-          >
-            <Ionicons
-              name="arrow-back"
-              size={22}
-              color={
-                Brand.ink
-              }
-            />
-          </Pressable>
+    <SafeAreaView style={styles.safeArea} edges={['top']}>
+      <ScrollView contentContainerStyle={styles.content}>
+        <ScreenBackButton label="Journey" />
 
-          <View>
-            <Text
-              style={styles.title}
-            >
-              Journey History
-            </Text>
-
-            <Text
-              style={
-                styles.subtitle
-              }
-            >
-              Review your previous Safe
-              Journeys.
-            </Text>
-          </View>
-        </View>
-
-        {journeys.length ===
-        0 ? (
-          <View
-            style={
-              styles.emptyCard
-            }
-          >
+        {/* ---------- Header ---------- */}
+        <View style={styles.headerBlock}>
+          <View style={styles.headerIconWrap}>
             <Ionicons
               name="time-outline"
-              size={42}
-              color={
-                Brand.burgundy
-              }
+              size={24}
+              color={Brand.burgundy}
             />
+          </View>
 
-            <Text
-              style={
-                styles.emptyTitle
-              }
-            >
-              No previous journeys
-            </Text>
-
-            <Text
-              style={
-                styles.emptyText
-              }
-            >
-              Completed or cancelled
-              journeys will appear here.
+          <View style={{ flex: 1 }}>
+            <Text style={styles.title}>Journey History</Text>
+            <Text style={styles.subtitle}>
+              Active, completed and cancelled Safe Journeys.
             </Text>
           </View>
-        ) : (
-          journeys.map(
-            journey => {
-              const finalTime =
-                journey.status ===
-                'completed'
-                  ? journey.completedAt
-                  : journey.cancelledAt;
+        </View>
 
-              return (
-                <Pressable
-                  key={
-                    journey.id
-                  }
-                  style={
-                    styles.journeyCard
-                  }
-                  onPress={() =>
-                    setSelectedJourney(
-                      journey
-                    )
-                  }
-                >
+        {error ? (
+          <View style={styles.errorCard}>
+            <Ionicons
+              name="alert-circle-outline"
+              size={18}
+              color="#B42318"
+            />
+
+            <View style={{ flex: 1 }}>
+              <Text style={styles.errorText}>{error}</Text>
+
+              <Pressable
+                style={({ pressed }) => [
+                  styles.retryButton,
+                  pressed && styles.pressed,
+                ]}
+                onPress={retry}
+              >
+                <Ionicons
+                  name="refresh-outline"
+                  size={15}
+                  color={Brand.burgundy}
+                />
+                <Text style={styles.retryText}>Try Again</Text>
+              </Pressable>
+            </View>
+          </View>
+        ) : null}
+
+        {!error && journeys.length === 0 ? (
+          <View style={styles.emptyCard}>
+            <View style={styles.emptyIconWrap}>
+              <Ionicons
+                name="time-outline"
+                size={34}
+                color={Brand.burgundy}
+              />
+            </View>
+
+            <Text style={styles.emptyTitle}>No journeys yet</Text>
+            <Text style={styles.helperText}>
+              Your Safe Journeys will appear here.
+            </Text>
+          </View>
+        ) : null}
+
+        {journeys.map(journey => {
+          const isActive = journey.status === 'active';
+
+          return (
+            <Pressable
+              key={journey.id}
+              style={({ pressed }) => [
+                styles.card,
+                isActive && styles.activeCard,
+                pressed && styles.pressed,
+              ]}
+              onPress={() => setSelectedJourney(journey)}
+            >
+              <View style={styles.cardHeader}>
+                <View style={styles.cardHeaderLeft}>
                   <View
-                    style={
-                      styles.cardHeader
-                    }
+                    style={[
+                      styles.statusIconWrap,
+                      isActive
+                        ? styles.statusIconActive
+                        : journey.status === 'completed'
+                          ? styles.statusIconCompleted
+                          : styles.statusIconCancelled,
+                    ]}
                   >
-                    <View
-                      style={
-                        styles.destinationRow
-                      }
-                    >
-                      <Ionicons
-                        name="location-outline"
-                        size={20}
-                        color={
-                          Brand.burgundy
-                        }
-                      />
-
-                      <Text
-                        style={
-                          styles.destination
-                        }
-                      >
-                        {
-                          journey.destination
-                        }
-                      </Text>
-                    </View>
-
-                    <View
-                      style={[
-                        styles.statusBadge,
-                        journey.status ===
-                          'completed'
-                          ? styles.completedBadge
-                          : styles.cancelledBadge,
-                      ]}
-                    >
-                      <Text
-                        style={
-                          styles.statusText
-                        }
-                      >
-                        {journey.status ===
-                        'completed'
-                          ? 'Completed'
-                          : 'Cancelled'}
-                      </Text>
-                    </View>
-                  </View>
-
-                  <Text
-                    style={
-                      styles.timeLabel
-                    }
-                  >
-                    Started:{' '}
-                    {formatDateTime(
-                      journey.createdAt
-                    )}
-                  </Text>
-
-                  <Text
-                    style={
-                      styles.timeLabel
-                    }
-                  >
-                    {journey.status ===
-                    'completed'
-                      ? 'Completed'
-                      : 'Cancelled'}
-                    :{' '}
-                    {formatDateTime(
-                      finalTime
-                    )}
-                  </Text>
-
-                  <View
-                    style={
-                      styles.openRow
-                    }
-                  >
-                    <Text
-                      style={
-                        styles.openText
-                      }
-                    >
-                      View details
-                    </Text>
-
                     <Ionicons
-                      name="chevron-forward"
-                      size={18}
+                      name={statusIcon(journey.status)}
+                      size={16}
                       color={
-                        Brand.burgundy
+                        isActive
+                          ? '#287550'
+                          : journey.status === 'completed'
+                            ? '#2E6DA4'
+                            : '#B42318'
                       }
                     />
                   </View>
-                </Pressable>
-              );
-            }
-          )
-        )}
+
+                  <Text style={styles.destination} numberOfLines={2}>
+                    {journey.destination}
+                  </Text>
+                </View>
+
+                <View
+                  style={[
+                    styles.badge,
+                    isActive
+                      ? styles.activeBadge
+                      : journey.status === 'completed'
+                        ? styles.completedBadge
+                        : styles.cancelledBadge,
+                  ]}
+                >
+                  <Text style={styles.badgeText}>
+                    {statusText(journey.status)}
+                  </Text>
+                </View>
+              </View>
+
+              <View style={styles.metaRow}>
+                <Ionicons
+                  name="play-outline"
+                  size={13}
+                  color={Brand.muted}
+                />
+                <Text style={styles.meta}>
+                  Started: {formatDateTime(journey.createdAt)}
+                </Text>
+              </View>
+
+              <View style={styles.metaRow}>
+                <Ionicons
+                  name={
+                    journey.status === 'active'
+                      ? 'time-outline'
+                      : journey.status === 'completed'
+                        ? 'checkmark-outline'
+                        : 'close-outline'
+                  }
+                  size={13}
+                  color={Brand.muted}
+                />
+                <Text style={styles.meta}>
+                  {journey.status === 'active'
+                    ? 'Expected'
+                    : journey.status === 'completed'
+                      ? 'Completed'
+                      : 'Cancelled'}
+                  :{' '}
+                  {formatDateTime(
+                    journey.status === 'active'
+                      ? journey.expectedArrivalTime
+                      : journey.status === 'completed'
+                        ? journey.completedAt
+                        : journey.cancelledAt
+                  )}
+                </Text>
+              </View>
+
+              <View style={styles.openRow}>
+                <Text style={styles.openText}>
+                  {isActive ? 'Tap to resume' : 'Tap for details'}
+                </Text>
+                <Ionicons
+                  name="chevron-forward"
+                  size={16}
+                  color={Brand.burgundy}
+                />
+              </View>
+            </Pressable>
+          );
+        })}
       </ScrollView>
 
       <Modal
-        visible={
-          selectedJourney !==
-          null
-        }
+        visible={selectedJourney !== null}
         transparent
         animationType="slide"
-        onRequestClose={() =>
-          setSelectedJourney(
-            null
-          )
-        }
+        onRequestClose={() => setSelectedJourney(null)}
       >
-        <View
-          style={
-            styles.modalBackdrop
-          }
-        >
-          <View
-            style={
-              styles.modalSheet
-            }
-          >
+        <View style={styles.modalBackdrop}>
+          <View style={styles.modalSheet}>
             {selectedJourney ? (
               <>
-                <View
-                  style={
-                    styles.modalHeader
-                  }
-                >
-                  <Text
-                    style={
-                      styles.modalTitle
-                    }
-                  >
-                    Journey Details
-                  </Text>
+                <View style={styles.modalHandle} />
+
+                <View style={styles.modalHeader}>
+                  <Text style={styles.modalTitle}>Journey Details</Text>
 
                   <Pressable
-                    style={
-                      styles.closeButton
-                    }
-                    onPress={() =>
-                      setSelectedJourney(
-                        null
-                      )
-                    }
+                    onPress={() => setSelectedJourney(null)}
+                    style={({ pressed }) => [
+                      styles.closeButton,
+                      pressed && styles.pressed,
+                    ]}
                   >
-                    <Ionicons
-                      name="close"
-                      size={22}
-                      color={
-                        Brand.ink
-                      }
-                    />
+                    <Ionicons name="close" size={20} color={Brand.ink} />
                   </Pressable>
                 </View>
 
-                <ScrollView
-                  showsVerticalScrollIndicator={
-                    false
-                  }
-                >
-                  <Text
-                    style={
-                      styles.detailLabel
-                    }
-                  >
-                    Destination
-                  </Text>
+                <ScrollView showsVerticalScrollIndicator={false}>
+                  <Detail
+                    label="Destination"
+                    value={selectedJourney.destination}
+                  />
 
-                  <Text
-                    style={
-                      styles.detailValue
-                    }
-                  >
-                    {
-                      selectedJourney.destination
-                    }
-                  </Text>
+                  <Detail
+                    label="Status"
+                    value={statusText(selectedJourney.status)}
+                  />
 
-                  <Text
-                    style={
-                      styles.detailLabel
-                    }
-                  >
-                    Status
-                  </Text>
+                  <Detail
+                    label="Started"
+                    value={formatDateTime(selectedJourney.createdAt)}
+                  />
 
-                  <Text
-                    style={
-                      styles.detailValue
-                    }
-                  >
-                    {selectedJourney.status ===
-                    'completed'
-                      ? 'Completed'
-                      : 'Cancelled'}
-                  </Text>
-
-                  <Text
-                    style={
-                      styles.detailLabel
-                    }
-                  >
-                    Started
-                  </Text>
-
-                  <Text
-                    style={
-                      styles.detailValue
-                    }
-                  >
-                    {formatDateTime(
-                      selectedJourney.createdAt
-                    )}
-                  </Text>
-
-                  <Text
-                    style={
-                      styles.detailLabel
-                    }
-                  >
-                    Expected arrival
-                  </Text>
-
-                  <Text
-                    style={
-                      styles.detailValue
-                    }
-                  >
-                    {formatDateTime(
+                  <Detail
+                    label="Expected arrival"
+                    value={formatDateTime(
                       selectedJourney.expectedArrivalTime
                     )}
-                  </Text>
+                  />
 
-                  <Text
-                    style={
-                      styles.detailLabel
-                    }
-                  >
-                    {selectedJourney.status ===
-                    'completed'
-                      ? 'Completed at'
-                      : 'Cancelled at'}
-                  </Text>
+                  <Detail
+                    label="Last check-in"
+                    value={formatDateTime(selectedJourney.lastCheckInAt)}
+                  />
 
-                  <Text
-                    style={
-                      styles.detailValue
-                    }
-                  >
-                    {formatDateTime(
-                      selectedJourney.status ===
-                      'completed'
-                        ? selectedJourney.completedAt
-                        : selectedJourney.cancelledAt
-                    )}
-                  </Text>
+                  {selectedJourney.status === 'completed' ? (
+                    <Detail
+                      label="Completed"
+                      value={formatDateTime(selectedJourney.completedAt)}
+                    />
+                  ) : null}
 
-                  <Text
-                    style={
-                      styles.detailLabel
-                    }
-                  >
-                    Last check-in
-                  </Text>
+                  {selectedJourney.status === 'cancelled' ? (
+                    <Detail
+                      label="Cancelled"
+                      value={formatDateTime(selectedJourney.cancelledAt)}
+                    />
+                  ) : null}
 
-                  <Text
-                    style={
-                      styles.detailValue
-                    }
-                  >
-                    {formatDateTime(
-                      selectedJourney.lastCheckInAt
-                    )}
-                  </Text>
-
-                  <Text
-                    style={
-                      styles.detailLabel
-                    }
-                  >
-                    Location
-                  </Text>
-
-                  <Text
-                    style={
-                      styles.detailValue
-                    }
-                  >
-                    {formatCoordinate(
-                      selectedJourney.currentLocation
-                        .latitude
-                    )}
-                    ,{' '}
-                    {formatCoordinate(
-                      selectedJourney.currentLocation
-                        .longitude
-                    )}
-                  </Text>
-
-                  <Text
-                    style={
-                      styles.detailLabel
-                    }
-                  >
-                    Trusted contacts
-                  </Text>
-
-                  <Text
-                    style={
-                      styles.detailValue
-                    }
-                  >
-                    {JOURNEY_TRUSTED_CONTACTS.filter(
-                      contact =>
-                        selectedJourney.trustedContactIds.includes(
-                          contact.id
+                  <Detail
+                    label="Trusted contacts"
+                    value={
+                      selectedJourney.trustedContactIds
+                        .map(
+                          id =>
+                            contactNames.get(id) ?? 'Saved contact'
                         )
-                    )
-                      .map(
-                        contact =>
-                          contact.name
-                      )
-                      .join(', ') ||
-                      'None'}
-                  </Text>
-
-                  <Text
-                    style={
-                      styles.detailLabel
+                        .join(', ') || 'None'
                     }
-                  >
-                    Check-in interval
-                  </Text>
+                  />
 
-                  <Text
-                    style={
-                      styles.detailValue
-                    }
-                  >
-                    {
-                      selectedJourney.checkInIntervalMinutes
-                    }{' '}
-                    minutes
-                  </Text>
+                  <Detail
+                    label="Check-in interval"
+                    value={`${selectedJourney.checkInIntervalMinutes} minutes`}
+                  />
+
+                  {selectedJourney.status === 'active' ? (
+                    <Pressable
+                      style={({ pressed }) => [
+                        styles.resumeButton,
+                        pressed && styles.pressed,
+                      ]}
+                      onPress={() => {
+                        setSelectedJourney(null);
+                        router.push('/active-journey' as Href);
+                      }}
+                    >
+                      <Ionicons
+                        name="navigate"
+                        size={17}
+                        color="#FFFFFF"
+                      />
+                      <Text style={styles.resumeText}>
+                        Resume Active Journey
+                      </Text>
+                    </Pressable>
+                  ) : null}
                 </ScrollView>
               </>
             ) : null}
@@ -632,244 +421,347 @@ export default function JourneyHistoryScreen() {
   );
 }
 
-const styles =
-  StyleSheet.create({
-    safeArea: {
-      flex: 1,
-      backgroundColor:
-        Brand.cream,
-    },
+function Detail({ label, value }: { label: string; value: string }) {
+  return (
+    <View style={styles.detailRow}>
+      <Text style={styles.detailLabel}>{label}</Text>
+      <Text style={styles.detailValue}>{value}</Text>
+    </View>
+  );
+}
 
-    content: {
-      paddingHorizontal: 20,
-      paddingTop: 18,
-      paddingBottom: 40,
-    },
+const styles = StyleSheet.create({
+  safeArea: {
+    flex: 1,
+    backgroundColor: Brand.cream,
+  },
 
-    header: {
-      flexDirection: 'row',
-      alignItems: 'center',
-      gap: 12,
-      marginBottom: 24,
-    },
+  content: {
+    paddingHorizontal: 20,
+    paddingTop: 14,
+    paddingBottom: 44,
+  },
 
-    backButton: {
-      width: 42,
-      height: 42,
-      alignItems: 'center',
-      justifyContent: 'center',
-      borderRadius: 21,
-      backgroundColor:
-        Brand.white,
-      borderWidth: 1,
-      borderColor:
-        Brand.line,
-    },
+  /* ---------- Header ---------- */
+  headerBlock: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+    marginTop: 6,
+    marginBottom: 18,
+  },
 
-    title: {
-      color: Brand.ink,
-      fontSize: 23,
-      fontWeight: '900',
-    },
+  headerIconWrap: {
+    width: 50,
+    height: 50,
+    borderRadius: 16,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: Brand.blush,
+    borderWidth: 1,
+    borderColor: Brand.roseSoft,
+  },
 
-    subtitle: {
-      marginTop: 3,
-      color: Brand.muted,
-      fontSize: 12,
-    },
+  title: {
+    color: Brand.ink,
+    fontSize: 24,
+    fontWeight: '900',
+    letterSpacing: -0.3,
+  },
 
-    journeyCard: {
-      marginBottom: 13,
-      padding: 16,
-      borderWidth: 1,
-      borderColor:
-        Brand.line,
-      borderRadius: 17,
-      backgroundColor:
-        Brand.white,
-    },
+  subtitle: {
+    marginTop: 4,
+    color: Brand.muted,
+    fontSize: 13,
+    lineHeight: 18,
+  },
 
-    cardHeader: {
-      flexDirection: 'row',
-      alignItems: 'flex-start',
-      justifyContent:
-        'space-between',
-      gap: 10,
-    },
+  center: {
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
 
-    destinationRow: {
-      flex: 1,
-      flexDirection: 'row',
-      alignItems: 'center',
-      gap: 7,
-    },
+  helperText: {
+    marginTop: 8,
+    color: Brand.muted,
+    textAlign: 'center',
+    fontSize: 12.5,
+  },
 
-    destination: {
-      flex: 1,
-      color: Brand.ink,
-      fontSize: 16,
-      fontWeight: '800',
-    },
+  /* ---------- Error ---------- */
+  errorCard: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: 10,
+    padding: 15,
+    borderRadius: 16,
+    backgroundColor: '#FEF3F2',
+    borderWidth: 1,
+    borderColor: '#F8CFCB',
+    marginBottom: 14,
+  },
 
-    statusBadge: {
-      paddingVertical: 5,
-      paddingHorizontal: 9,
-      borderRadius: 12,
-    },
+  errorText: {
+    color: '#B42318',
+    fontSize: 12.5,
+    lineHeight: 18,
+    fontWeight: '600',
+  },
 
-    completedBadge: {
-      backgroundColor:
-        '#E8F5ED',
-    },
+  retryButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 5,
+    marginTop: 10,
+    alignSelf: 'flex-start',
+  },
 
-    cancelledBadge: {
-      backgroundColor:
-        '#FDECEC',
-    },
+  retryText: {
+    color: Brand.burgundy,
+    fontWeight: '800',
+    fontSize: 12.5,
+    textDecorationLine: 'underline',
+  },
 
-    statusText: {
-      color: Brand.ink,
-      fontSize: 10,
-      fontWeight: '800',
-    },
+  /* ---------- Empty ---------- */
+  emptyCard: {
+    alignItems: 'center',
+    padding: 30,
+    borderRadius: 20,
+    backgroundColor: Brand.white,
+    borderWidth: 1,
+    borderColor: Brand.line,
+  },
 
-    timeLabel: {
-      marginTop: 10,
-      color: Brand.muted,
-      fontSize: 11,
-    },
+  emptyIconWrap: {
+    width: 76,
+    height: 76,
+    borderRadius: 22,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: Brand.blush,
+  },
 
-    openRow: {
-      flexDirection: 'row',
-      alignItems: 'center',
-      justifyContent:
-        'flex-end',
-      gap: 3,
-      marginTop: 13,
-    },
+  emptyTitle: {
+    marginTop: 14,
+    color: Brand.ink,
+    fontWeight: '800',
+    fontSize: 17,
+  },
 
-    openText: {
-      color: Brand.burgundy,
-      fontSize: 12,
-      fontWeight: '700',
-    },
+  /* ---------- Card ---------- */
+  card: {
+    marginBottom: 12,
+    padding: 16,
+    borderWidth: 1,
+    borderColor: Brand.line,
+    borderRadius: 18,
+    backgroundColor: Brand.white,
+    shadowColor: '#4E1026',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.04,
+    shadowRadius: 6,
+    elevation: 1,
+  },
 
-    emptyCard: {
-      alignItems: 'center',
-      padding: 28,
-      borderWidth: 1,
-      borderColor:
-        Brand.line,
-      borderRadius: 18,
-      backgroundColor:
-        Brand.white,
-    },
+  activeCard: {
+    borderColor: '#B7DEC9',
+    backgroundColor: '#F5FBF7',
+    shadowColor: '#287550',
+    shadowOpacity: 0.08,
+    elevation: 2,
+  },
 
-    emptyTitle: {
-      marginTop: 12,
-      color: Brand.ink,
-      fontSize: 17,
-      fontWeight: '800',
-    },
+  cardHeader: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    justifyContent: 'space-between',
+    gap: 10,
+  },
 
-    emptyText: {
-      marginTop: 6,
-      color: Brand.muted,
-      fontSize: 12,
-      textAlign: 'center',
-    },
+  cardHeaderLeft: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+  },
 
-    centerState: {
-      flex: 1,
-      alignItems: 'center',
-      justifyContent: 'center',
-      paddingHorizontal: 30,
-    },
+  statusIconWrap: {
+    width: 34,
+    height: 34,
+    borderRadius: 11,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
 
-    stateTitle: {
-      marginTop: 10,
-      color: Brand.ink,
-      fontSize: 18,
-      fontWeight: '800',
-    },
+  statusIconActive: {
+    backgroundColor: '#DDF4E6',
+  },
 
-    stateText: {
-      marginTop: 8,
-      color: Brand.muted,
-      fontSize: 12,
-      lineHeight: 18,
-      textAlign: 'center',
-    },
+  statusIconCompleted: {
+    backgroundColor: '#E7F1FA',
+  },
 
-    primaryButton: {
-      marginTop: 18,
-      paddingVertical: 12,
-      paddingHorizontal: 20,
-      borderRadius: 13,
-      backgroundColor:
-        Brand.burgundy,
-    },
+  statusIconCancelled: {
+    backgroundColor: '#FDECEC',
+  },
 
-    primaryButtonText: {
-      color: Brand.white,
-      fontWeight: '800',
-    },
+  destination: {
+    flex: 1,
+    color: Brand.ink,
+    fontSize: 15.5,
+    fontWeight: '800',
+    letterSpacing: -0.1,
+  },
 
-    modalBackdrop: {
-      flex: 1,
-      justifyContent:
-        'flex-end',
-      backgroundColor:
-        'rgba(41, 24, 32, 0.35)',
-    },
+  badge: {
+    paddingVertical: 5,
+    paddingHorizontal: 10,
+    borderRadius: 10,
+  },
 
-    modalSheet: {
-      maxHeight: '82%',
-      paddingTop: 20,
-      paddingHorizontal: 20,
-      paddingBottom: 30,
-      borderTopLeftRadius: 24,
-      borderTopRightRadius: 24,
-      backgroundColor:
-        Brand.white,
-    },
+  activeBadge: {
+    backgroundColor: '#DDF4E6',
+  },
 
-    modalHeader: {
-      flexDirection: 'row',
-      alignItems: 'center',
-      justifyContent:
-        'space-between',
-      marginBottom: 18,
-    },
+  completedBadge: {
+    backgroundColor: '#E7F1FA',
+  },
 
-    modalTitle: {
-      color: Brand.ink,
-      fontSize: 20,
-      fontWeight: '900',
-    },
+  cancelledBadge: {
+    backgroundColor: '#FDECEC',
+  },
 
-    closeButton: {
-      width: 38,
-      height: 38,
-      alignItems: 'center',
-      justifyContent: 'center',
-      borderRadius: 19,
-      backgroundColor:
-        Brand.blush,
-    },
+  badgeText: {
+    color: Brand.ink,
+    fontSize: 10,
+    fontWeight: '900',
+    letterSpacing: 0.4,
+  },
 
-    detailLabel: {
-      marginTop: 14,
-      color: Brand.muted,
-      fontSize: 11,
-      fontWeight: '700',
-    },
+  metaRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    marginTop: 8,
+  },
 
-    detailValue: {
-      marginTop: 4,
-      color: Brand.ink,
-      fontSize: 14,
-      lineHeight: 20,
-      fontWeight: '600',
-    },
-  });
+  meta: {
+    color: Brand.muted,
+    fontSize: 11.5,
+  },
+
+  openRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    marginTop: 12,
+    alignSelf: 'flex-start',
+  },
+
+  openText: {
+    color: Brand.burgundy,
+    fontWeight: '800',
+    fontSize: 12.5,
+  },
+
+  /* ---------- Modal ---------- */
+  modalBackdrop: {
+    flex: 1,
+    justifyContent: 'flex-end',
+    backgroundColor: 'rgba(41,24,32,0.45)',
+  },
+
+  modalSheet: {
+    maxHeight: '82%',
+    padding: 20,
+    paddingTop: 12,
+    paddingBottom: 32,
+    borderTopLeftRadius: 26,
+    borderTopRightRadius: 26,
+    backgroundColor: Brand.white,
+  },
+
+  modalHandle: {
+    width: 44,
+    height: 5,
+    alignSelf: 'center',
+    marginBottom: 16,
+    borderRadius: 3,
+    backgroundColor: '#D9C9D0',
+  },
+
+  modalHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 18,
+  },
+
+  modalTitle: {
+    color: Brand.ink,
+    fontSize: 20,
+    fontWeight: '900',
+    letterSpacing: -0.2,
+  },
+
+  closeButton: {
+    width: 38,
+    height: 38,
+    borderRadius: 19,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: Brand.blush,
+  },
+
+  /* ---------- Detail ---------- */
+  detailRow: {
+    marginBottom: 14,
+    paddingBottom: 12,
+    borderBottomWidth: 1,
+    borderBottomColor: Brand.line,
+  },
+
+  detailLabel: {
+    color: Brand.muted,
+    fontSize: 11,
+    fontWeight: '800',
+    letterSpacing: 0.5,
+    textTransform: 'uppercase',
+  },
+
+  detailValue: {
+    marginTop: 5,
+    color: Brand.ink,
+    fontSize: 14,
+    fontWeight: '700',
+    lineHeight: 20,
+  },
+
+  resumeButton: {
+    minHeight: 54,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+    marginTop: 6,
+    borderRadius: 15,
+    backgroundColor: '#287550',
+    shadowColor: '#287550',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.25,
+    shadowRadius: 8,
+    elevation: 3,
+  },
+
+  resumeText: {
+    color: '#FFFFFF',
+    fontWeight: '900',
+    fontSize: 14.5,
+  },
+
+  pressed: {
+    opacity: 0.8,
+  },
+});

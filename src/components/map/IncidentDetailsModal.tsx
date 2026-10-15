@@ -1,36 +1,49 @@
 import { Ionicons } from '@expo/vector-icons';
-import { useRef } from 'react';
+
 import {
-    KeyboardAvoidingView,
-    Modal,
-    Pressable,
-    ScrollView,
-    StyleSheet,
-    Text,
-    View,
+  useRef,
+} from 'react';
+
+import {
+  KeyboardAvoidingView,
+  Modal,
+  Pressable,
+  ScrollView,
+  StyleSheet,
+  Text,
+  View,
 } from 'react-native';
 
 import {
-    getIncidentCategory,
-    getIncidentCategoryLabel,
+  getIncidentCategory,
+  getIncidentCategoryLabel,
 } from '@/constants/incident-categories';
+
 import ReportInappropriateContent from '@/src/components/map/ReportInappropriateContent';
 
 import type {
-    Incident,
-    IncidentStatus,
+  Incident,
+  IncidentStatus,
 } from '@/src/types/incident';
 
 type IncidentDetailsModalProps = {
-  incident: Incident | null;
-  visible: boolean;
-  onClose: () => void;
+  incident:
+    Incident | null;
+
+  visible:
+    boolean;
+
+  onClose:
+    () => void;
 };
 
 function formatIncidentDate(
-  incident: Incident
+  incident:
+    Incident
 ): string {
-  if (!incident.createdAt) {
+  if (
+    !incident.createdAt
+  ) {
     return 'Date and time unavailable';
   }
 
@@ -40,8 +53,11 @@ function formatIncidentDate(
       .toLocaleString(
         [],
         {
-          dateStyle: 'medium',
-          timeStyle: 'short',
+          dateStyle:
+            'medium',
+
+          timeStyle:
+            'short',
         }
       );
   } catch {
@@ -50,40 +66,71 @@ function formatIncidentDate(
 }
 
 function getStatusDetails(
-  status: IncidentStatus
+  status:
+    IncidentStatus
 ) {
-  switch (status) {
+  switch (
+    status
+  ) {
     case 'under-review':
       return {
-        label: 'Under Review',
-        icon: 'time-outline' as const,
-        color: '#2E6DA4',
-        backgroundColor: '#E7F1FA',
+        label:
+          'Under Review',
+
+        icon:
+          'time-outline' as const,
+
+        color:
+          '#2E6DA4',
+
+        backgroundColor:
+          '#E7F1FA',
       };
 
     case 'resolved':
       return {
-        label: 'Resolved',
-        icon: 'checkmark-circle-outline' as const,
-        color: '#35735A',
-        backgroundColor: '#E5F4ED',
+        label:
+          'Resolved',
+
+        icon:
+          'checkmark-circle-outline' as const,
+
+        color:
+          '#35735A',
+
+        backgroundColor:
+          '#E5F4ED',
       };
 
     case 'removed':
       return {
-        label: 'Removed',
-        icon: 'remove-circle-outline' as const,
-        color: '#8B5555',
-        backgroundColor: '#F6E7E7',
+        label:
+          'Removed',
+
+        icon:
+          'remove-circle-outline' as const,
+
+        color:
+          '#8B5555',
+
+        backgroundColor:
+          '#F6E7E7',
       };
 
     case 'active':
     default:
       return {
-        label: 'Active',
-        icon: 'warning-outline' as const,
-        color: '#A66518',
-        backgroundColor: '#FFF3D6',
+        label:
+          'Active',
+
+        icon:
+          'warning-outline' as const,
+
+        color:
+          '#A66518',
+
+        backgroundColor:
+          '#FFF3D6',
       };
   }
 }
@@ -93,9 +140,14 @@ export default function IncidentDetailsModal({
   visible,
   onClose,
 }: IncidentDetailsModalProps) {
-  const scrollRef = useRef<ScrollView>(null);
+  const scrollRef =
+    useRef<ScrollView>(
+      null
+    );
 
-  if (!incident) {
+  if (
+    !incident
+  ) {
     return null;
   }
 
@@ -110,7 +162,8 @@ export default function IncidentDetailsModal({
     );
 
   const categoryColor =
-    category?.color ?? '#C43D74';
+    category?.color ??
+    '#C43D74';
 
   const categoryBackground =
     category?.backgroundColor ??
@@ -131,118 +184,230 @@ export default function IncidentDetailsModal({
 
   return (
     <Modal
-      visible={visible}
+      visible={
+        visible
+      }
       transparent
       animationType="slide"
       statusBarTranslucent
-      onRequestClose={onClose}
+      onRequestClose={
+        onClose
+      }
     >
-      <View style={styles.overlay}>
+      <View
+        style={
+          styles.overlay
+        }
+      >
         <Pressable
-          style={styles.dismissArea}
-          onPress={onClose}
+          style={
+            styles.dismissArea
+          }
+          onPress={
+            onClose
+          }
           accessibilityRole="button"
           accessibilityLabel="Close incident details"
         />
 
-        <KeyboardAvoidingView behavior="padding" style={styles.modalContainer}>
-          <View style={styles.handle} />
+        <KeyboardAvoidingView
+          behavior="padding"
+          style={
+            styles.modalContainer
+          }
+        >
+          <View
+            style={
+              styles.handle
+            }
+          />
 
           <ScrollView
-            ref={scrollRef}
-            contentContainerStyle={styles.content}
+            ref={
+              scrollRef
+            }
+            contentContainerStyle={
+              styles.content
+            }
             automaticallyAdjustKeyboardInsets
             keyboardShouldPersistTaps="handled"
-            showsVerticalScrollIndicator={false}
+            showsVerticalScrollIndicator={
+              false
+            }
           >
-            <View style={styles.header}>
-              <View style={styles.headerText}>
-                <Text style={styles.smallTitle}>
-                  INCIDENT DETAILS
-                </Text>
+            {/* ---------- Header ---------- */}
+            <View
+              style={
+                styles.header
+              }
+            >
+              <View
+                style={
+                  styles.headerText
+                }
+              >
+                <View
+                  style={
+                    styles.smallTitlePill
+                  }
+                >
+                  <View
+                    style={
+                      styles.smallTitleDot
+                    }
+                  />
 
-                <Text style={styles.title}>
-                  {categoryLabel}
+                  <Text
+                    style={
+                      styles.smallTitle
+                    }
+                  >
+                    INCIDENT DETAILS
+                  </Text>
+                </View>
+
+                <Text
+                  style={
+                    styles.title
+                  }
+                >
+                  {
+                    categoryLabel
+                  }
                 </Text>
               </View>
 
               <Pressable
-                style={({ pressed }) => [
+                style={({
+                  pressed,
+                }) => [
                   styles.closeIconButton,
+
                   pressed &&
                     styles.buttonPressed,
                 ]}
-                onPress={onClose}
+                onPress={
+                  onClose
+                }
                 accessibilityRole="button"
                 accessibilityLabel="Close incident details"
               >
                 <Ionicons
                   name="close"
-                  size={23}
+                  size={
+                    21
+                  }
                   color="#32252B"
                 />
               </Pressable>
             </View>
 
+            {/* ---------- Category icon ---------- */}
             <View
-              style={[
-                styles.categoryIcon,
-                {
-                  backgroundColor:
-                    categoryBackground,
-                },
-              ]}
+              style={
+                styles.heroRow
+              }
             >
-              <Ionicons
-                name={categoryIcon}
-                size={34}
-                color={categoryColor}
-              />
-            </View>
-
-            <View
-              style={[
-                styles.statusBadge,
-                {
-                  backgroundColor:
-                    status.backgroundColor,
-                },
-              ]}
-            >
-              <Ionicons
-                name={status.icon}
-                size={17}
-                color={status.color}
-              />
-
-              <Text
+              <View
                 style={[
-                  styles.statusText,
+                  styles.categoryIcon,
+
                   {
-                    color: status.color,
+                    backgroundColor:
+                      categoryBackground,
                   },
                 ]}
               >
-                {status.label} report
-              </Text>
+                <Ionicons
+                  name={
+                    categoryIcon
+                  }
+                  size={
+                    32
+                  }
+                  color={
+                    categoryColor
+                  }
+                />
+              </View>
+
+              <View
+                style={[
+                  styles.statusBadge,
+
+                  {
+                    backgroundColor:
+                      status.backgroundColor,
+                  },
+                ]}
+              >
+                <Ionicons
+                  name={
+                    status.icon
+                  }
+                  size={
+                    15
+                  }
+                  color={
+                    status.color
+                  }
+                />
+
+                <Text
+                  style={[
+                    styles.statusText,
+
+                    {
+                      color:
+                        status.color,
+                    },
+                  ]}
+                >
+                  {status.label} report
+                </Text>
+              </View>
             </View>
 
-            <Text style={styles.sectionLabel}>
+            {/* ---------- Description ---------- */}
+            <Text
+              style={
+                styles.sectionLabel
+              }
+            >
               Description
             </Text>
 
-            <Text style={styles.description}>
-              {description}
-            </Text>
+            <View
+              style={
+                styles.descriptionCard
+              }
+            >
+              <Text
+                style={
+                  styles.description
+                }
+              >
+                {
+                  description
+                }
+              </Text>
+            </View>
 
-            <View style={styles.divider} />
+            <View
+              style={
+                styles.divider
+              }
+            />
 
+            {/* ---------- Details ---------- */}
             <DetailRow
               icon="calendar-outline"
               label="REPORTED"
-              value={formatIncidentDate(
-                incident
-              )}
+              value={
+                formatIncidentDate(
+                  incident
+                )
+              }
             />
 
             <DetailRow
@@ -262,58 +427,108 @@ export default function IncidentDetailsModal({
             <DetailRow
               icon="information-circle-outline"
               label="STATUS"
-              value={status.label}
+              value={
+                status.label
+              }
             />
 
             <DetailRow
               icon="location-outline"
               label="LOCATION"
-              value={`${incident.coordinates.latitude.toFixed(
-                6
-              )}, ${incident.coordinates.longitude.toFixed(
-                6
-              )}`}
+              value={
+                incident.address ??
+                `${incident.coordinates.latitude.toFixed(
+                  6
+                )}, ${incident.coordinates.longitude.toFixed(
+                  6
+                )}`
+              }
             />
 
-            <View style={styles.privacyBox}>
-              <Ionicons
-                name="shield-checkmark-outline"
-                size={22}
-                color="#A92F61"
-              />
+            {/* ---------- Privacy ---------- */}
+            <View
+              style={
+                styles.privacyBox
+              }
+            >
+              <View
+                style={
+                  styles.privacyIconWrap
+                }
+              >
+                <Ionicons
+                  name="shield-checkmark-outline"
+                  size={
+                    20
+                  }
+                  color="#A92F61"
+                />
+              </View>
 
-              <View style={styles.privacyTextArea}>
-                <Text style={styles.privacyTitle}>
+              <View
+                style={
+                  styles.privacyTextArea
+                }
+              >
+                <Text
+                  style={
+                    styles.privacyTitle
+                  }
+                >
                   Privacy protected
                 </Text>
 
-                <Text style={styles.privacyText}>
-                  Private reporter information, account identity and
-                  contact details are never displayed.
+                <Text
+                  style={
+                    styles.privacyText
+                  }
+                >
+                  Private reporter information,
+                  account identity and contact
+                  details are never displayed.
                 </Text>
               </View>
             </View>
 
+            {/* ---------- Report inappropriate content ---------- */}
             <ReportInappropriateContent
-              incidentId={incident.id}
+              incidentId={
+                incident.id
+              }
               onExpand={() => {
-                setTimeout(() => {
-                  scrollRef.current?.scrollToEnd({ animated: true });
-                }, 250);
+                setTimeout(
+                  () => {
+                    scrollRef.current?.scrollToEnd({
+                      animated:
+                        true,
+                    });
+                  },
+                  250
+                );
               }}
             />
 
+            {/* ---------- Close ---------- */}
             <Pressable
-              style={({ pressed }) => [
+              style={({
+                pressed,
+              }) => [
                 styles.closeButton,
+
                 pressed &&
                   styles.buttonPressed,
               ]}
-              onPress={onClose}
+              onPress={
+                onClose
+              }
               accessibilityRole="button"
               accessibilityLabel="Close incident details"
             >
-              <Text style={styles.closeButtonText}>
+              <Text
+                style={
+                  styles.closeButtonText
+                }
+              >
                 Close
               </Text>
             </Pressable>
@@ -325,9 +540,14 @@ export default function IncidentDetailsModal({
 }
 
 type DetailRowProps = {
-  icon: keyof typeof Ionicons.glyphMap;
-  label: string;
-  value: string;
+  icon:
+    keyof typeof Ionicons.glyphMap;
+
+  label:
+    string;
+
+  value:
+    string;
 };
 
 function DetailRow({
@@ -336,21 +556,45 @@ function DetailRow({
   value,
 }: DetailRowProps) {
   return (
-    <View style={styles.detailRow}>
-      <View style={styles.detailIcon}>
+    <View
+      style={
+        styles.detailRow
+      }
+    >
+      <View
+        style={
+          styles.detailIcon
+        }
+      >
         <Ionicons
-          name={icon}
-          size={20}
+          name={
+            icon
+          }
+          size={
+            19
+          }
           color="#A92F61"
         />
       </View>
 
-      <View style={styles.detailText}>
-        <Text style={styles.detailLabel}>
+      <View
+        style={
+          styles.detailText
+        }
+      >
+        <Text
+          style={
+            styles.detailLabel
+          }
+        >
           {label}
         </Text>
 
-        <Text style={styles.detailValue}>
+        <Text
+          style={
+            styles.detailValue
+          }
+        >
           {value}
         </Text>
       </View>
@@ -358,197 +602,531 @@ function DetailRow({
   );
 }
 
-const styles = StyleSheet.create({
-  overlay: {
-    flex: 1,
-    justifyContent: 'flex-end',
-    backgroundColor:
-      'rgba(30, 20, 25, 0.48)',
-  },
+const styles =
+  StyleSheet.create({
+    overlay: {
+      flex:
+        1,
 
-  dismissArea: {
-    flex: 1,
-  },
+      justifyContent:
+        'flex-end',
 
-  modalContainer: {
-    maxHeight: '88%',
-    borderTopLeftRadius: 28,
-    borderTopRightRadius: 28,
-    backgroundColor: '#FFFFFF',
-  },
+      backgroundColor:
+        'rgba(30, 20, 25, 0.48)',
+    },
 
-  handle: {
-    width: 46,
-    height: 5,
-    alignSelf: 'center',
-    marginTop: 10,
-    borderRadius: 3,
-    backgroundColor: '#D9C9D0',
-  },
+    dismissArea: {
+      flex:
+        1,
+    },
 
-  content: {
-    paddingHorizontal: 22,
-    paddingTop: 14,
-    paddingBottom: 34,
-  },
+    modalContainer: {
+      maxHeight:
+        '88%',
 
-  header: {
-    flexDirection: 'row',
-    alignItems: 'flex-start',
-    justifyContent: 'space-between',
-  },
+      borderTopLeftRadius:
+        28,
 
-  headerText: {
-    flex: 1,
-    paddingRight: 12,
-  },
+      borderTopRightRadius:
+        28,
 
-  smallTitle: {
-    color: '#A92F61',
-    fontSize: 11,
-    fontWeight: '800',
-    letterSpacing: 1.1,
-  },
+      backgroundColor:
+        '#FFFFFF',
+    },
 
-  title: {
-    marginTop: 4,
-    color: '#32252B',
-    fontSize: 25,
-    fontWeight: '900',
-  },
+    handle: {
+      width:
+        46,
 
-  closeIconButton: {
-    width: 42,
-    height: 42,
-    alignItems: 'center',
-    justifyContent: 'center',
-    borderRadius: 21,
-    backgroundColor: '#F7EFF2',
-  },
+      height:
+        5,
 
-  buttonPressed: {
-    opacity: 0.7,
-  },
+      alignSelf:
+        'center',
 
-  categoryIcon: {
-    width: 68,
-    height: 68,
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginTop: 22,
-    borderRadius: 22,
-  },
+      marginTop:
+        10,
 
-  statusBadge: {
-    alignSelf: 'flex-start',
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-    marginTop: 14,
-    paddingHorizontal: 11,
-    paddingVertical: 7,
-    borderRadius: 18,
-  },
+      borderRadius:
+        3,
 
-  statusText: {
-    fontSize: 12,
-    fontWeight: '800',
-  },
+      backgroundColor:
+        '#D9C9D0',
+    },
 
-  sectionLabel: {
-    marginTop: 22,
-    color: '#32252B',
-    fontSize: 14,
-    fontWeight: '800',
-  },
+    content: {
+      paddingHorizontal:
+        22,
 
-  description: {
-    marginTop: 7,
-    color: '#5D4B53',
-    fontSize: 15,
-    lineHeight: 23,
-  },
+      paddingTop:
+        14,
 
-  divider: {
-    height: 1,
-    marginVertical: 20,
-    backgroundColor: '#F1DDE6',
-  },
+      paddingBottom:
+        34,
+    },
 
-  detailRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginBottom: 17,
-  },
+    header: {
+      flexDirection:
+        'row',
 
-  detailIcon: {
-    width: 42,
-    height: 42,
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginRight: 12,
-    borderRadius: 14,
-    backgroundColor: '#FBEAF1',
-  },
+      alignItems:
+        'flex-start',
 
-  detailText: {
-    flex: 1,
-  },
+      justifyContent:
+        'space-between',
+    },
 
-  detailLabel: {
-    color: '#927E87',
-    fontSize: 11,
-    fontWeight: '700',
-  },
+    headerText: {
+      flex:
+        1,
 
-  detailValue: {
-    marginTop: 3,
-    color: '#32252B',
-    fontSize: 14,
-    fontWeight: '600',
-  },
+      paddingRight:
+        12,
+    },
 
-  privacyBox: {
-    flexDirection: 'row',
-    alignItems: 'flex-start',
-    gap: 11,
-    marginTop: 5,
-    padding: 15,
-    borderWidth: 1,
-    borderColor: '#F1C8DA',
-    borderRadius: 17,
-    backgroundColor: '#FBEAF1',
-  },
+    smallTitlePill: {
+      flexDirection:
+        'row',
 
-  privacyTextArea: {
-    flex: 1,
-  },
+      alignItems:
+        'center',
 
-  privacyTitle: {
-    color: '#742443',
-    fontSize: 13,
-    fontWeight: '800',
-  },
+      gap:
+        6,
 
-  privacyText: {
-    marginTop: 4,
-    color: '#75515F',
-    fontSize: 12,
-    lineHeight: 18,
-  },
+      alignSelf:
+        'flex-start',
 
-  closeButton: {
-    height: 52,
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginTop: 23,
-    borderRadius: 16,
-    backgroundColor: '#C43D74',
-  },
+      paddingHorizontal:
+        9,
 
-  closeButtonText: {
-    color: '#FFFFFF',
-    fontSize: 15,
-    fontWeight: '800',
-  },
-});
+      paddingVertical:
+        4,
+
+      borderRadius:
+        9,
+
+      backgroundColor:
+        '#FBEAF1',
+    },
+
+    smallTitleDot: {
+      width:
+        6,
+
+      height:
+        6,
+
+      borderRadius:
+        3,
+
+      backgroundColor:
+        '#A92F61',
+    },
+
+    smallTitle: {
+      color:
+        '#A92F61',
+
+      fontSize:
+        10,
+
+      fontWeight:
+        '900',
+
+      letterSpacing:
+        1,
+    },
+
+    title: {
+      marginTop:
+        8,
+
+      color:
+        '#32252B',
+
+      fontSize:
+        24,
+
+      fontWeight:
+        '900',
+
+      letterSpacing:
+        -0.3,
+    },
+
+    closeIconButton: {
+      width:
+        42,
+
+      height:
+        42,
+
+      alignItems:
+        'center',
+
+      justifyContent:
+        'center',
+
+      borderRadius:
+        21,
+
+      backgroundColor:
+        '#F7EFF2',
+    },
+
+    buttonPressed: {
+      opacity:
+        0.7,
+    },
+
+    heroRow: {
+      flexDirection:
+        'row',
+
+      alignItems:
+        'center',
+
+      gap:
+        12,
+
+      marginTop:
+        22,
+    },
+
+    categoryIcon: {
+      width:
+        68,
+
+      height:
+        68,
+
+      alignItems:
+        'center',
+
+      justifyContent:
+        'center',
+
+      borderRadius:
+        22,
+
+      shadowColor:
+        '#4E1026',
+
+      shadowOffset: {
+        width:
+          0,
+
+        height:
+          3,
+      },
+
+      shadowOpacity:
+        0.08,
+
+      shadowRadius:
+        8,
+
+      elevation:
+        2,
+    },
+
+    statusBadge: {
+      flexDirection:
+        'row',
+
+      alignItems:
+        'center',
+
+      gap:
+        6,
+
+      paddingHorizontal:
+        11,
+
+      paddingVertical:
+        7,
+
+      borderRadius:
+        18,
+    },
+
+    statusText: {
+      fontSize:
+        12,
+
+      fontWeight:
+        '800',
+
+      letterSpacing:
+        0.1,
+    },
+
+    sectionLabel: {
+      marginTop:
+        22,
+
+      color:
+        '#32252B',
+
+      fontSize:
+        13.5,
+
+      fontWeight:
+        '900',
+
+      letterSpacing:
+        -0.1,
+    },
+
+    descriptionCard: {
+      marginTop:
+        8,
+
+      padding:
+        14,
+
+      borderRadius:
+        14,
+
+      backgroundColor:
+        '#FBF5F7',
+
+      borderWidth:
+        1,
+
+      borderColor:
+        '#F1DDE6',
+    },
+
+    description: {
+      color:
+        '#5D4B53',
+
+      fontSize:
+        14,
+
+      lineHeight:
+        22,
+    },
+
+    divider: {
+      height:
+        1,
+
+      marginVertical:
+        22,
+
+      backgroundColor:
+        '#F1DDE6',
+    },
+
+    detailRow: {
+      flexDirection:
+        'row',
+
+      alignItems:
+        'center',
+
+      marginBottom:
+        17,
+    },
+
+    detailIcon: {
+      width:
+        42,
+
+      height:
+        42,
+
+      alignItems:
+        'center',
+
+      justifyContent:
+        'center',
+
+      marginRight:
+        12,
+
+      borderRadius:
+        14,
+
+      backgroundColor:
+        '#FBEAF1',
+
+      borderWidth:
+        1,
+
+      borderColor:
+        '#F1C8DA',
+    },
+
+    detailText: {
+      flex:
+        1,
+    },
+
+    detailLabel: {
+      color:
+        '#927E87',
+
+      fontSize:
+        10,
+
+      fontWeight:
+        '900',
+
+      letterSpacing:
+        0.8,
+    },
+
+    detailValue: {
+      marginTop:
+        4,
+
+      color:
+        '#32252B',
+
+      fontSize:
+        14,
+
+      fontWeight:
+        '700',
+
+      lineHeight:
+        19,
+    },
+
+    privacyBox: {
+      flexDirection:
+        'row',
+
+      alignItems:
+        'flex-start',
+
+      gap:
+        11,
+
+      marginTop:
+        5,
+
+      padding:
+        15,
+
+      borderWidth:
+        1,
+
+      borderColor:
+        '#F1C8DA',
+
+      borderRadius:
+        17,
+
+      backgroundColor:
+        '#FBEAF1',
+    },
+
+    privacyIconWrap: {
+      width:
+        38,
+
+      height:
+        38,
+
+      borderRadius:
+        12,
+
+      alignItems:
+        'center',
+
+      justifyContent:
+        'center',
+
+      backgroundColor:
+        '#FFFFFF',
+    },
+
+    privacyTextArea: {
+      flex:
+        1,
+    },
+
+    privacyTitle: {
+      color:
+        '#742443',
+
+      fontSize:
+        13,
+
+      fontWeight:
+        '900',
+    },
+
+    privacyText: {
+      marginTop:
+        4,
+
+      color:
+        '#75515F',
+
+      fontSize:
+        12,
+
+      lineHeight:
+        18,
+    },
+
+    closeButton: {
+      height:
+        54,
+
+      alignItems:
+        'center',
+
+      justifyContent:
+        'center',
+
+      marginTop:
+        24,
+
+      borderRadius:
+        16,
+
+      backgroundColor:
+        '#C43D74',
+
+      shadowColor:
+        '#C43D74',
+
+      shadowOffset: {
+        width:
+          0,
+
+        height:
+          5,
+      },
+
+      shadowOpacity:
+        0.28,
+
+      shadowRadius:
+        10,
+
+      elevation:
+        4,
+    },
+
+    closeButtonText: {
+      color:
+        '#FFFFFF',
+
+      fontSize:
+        15,
+
+      fontWeight:
+        '800',
+
+      letterSpacing:
+        0.3,
+    },
+  });

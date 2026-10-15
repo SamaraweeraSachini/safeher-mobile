@@ -2,12 +2,12 @@ import { Ionicons } from '@expo/vector-icons';
 import { type Href, useRouter } from 'expo-router';
 import { useEffect, useState } from 'react';
 import {
-    ActivityIndicator,
-    Pressable,
-    ScrollView,
-    StyleSheet,
-    Text,
-    View,
+  ActivityIndicator,
+  Pressable,
+  ScrollView,
+  StyleSheet,
+  Text,
+  View,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
@@ -19,23 +19,12 @@ import { getUserProfile } from '@/src/services/profile-service';
 export default function ProfileScreen() {
   const router = useRouter();
 
-  const {
-    user,
-    isGuest,
-    isRegisteredUser,
-  } = useAuth();
+  const { user, isGuest, isRegisteredUser } = useAuth();
 
-  const [profile, setProfile] =
-    useState<SafeHerUserProfile | null>(null);
-
-  const [profileLoading, setProfileLoading] =
-    useState(false);
-
-  const [profileMissing, setProfileMissing] =
-    useState(false);
-
-  const [profileError, setProfileError] =
-    useState<string | null>(null);
+  const [profile, setProfile] = useState<SafeHerUserProfile | null>(null);
+  const [profileLoading, setProfileLoading] = useState(false);
+  const [profileMissing, setProfileMissing] = useState(false);
+  const [profileError, setProfileError] = useState<string | null>(null);
 
   useEffect(() => {
     let screenIsActive = true;
@@ -93,9 +82,7 @@ export default function ProfileScreen() {
 
   const displayEmail = isGuest
     ? 'Not available for guest accounts'
-    : profile?.email ||
-      user?.email ||
-      'Email information unavailable';
+    : profile?.email || user?.email || 'Email information unavailable';
 
   const accountType = isGuest
     ? 'Guest Account'
@@ -116,10 +103,7 @@ export default function ProfileScreen() {
     return (
       <SafeAreaView style={styles.safeArea} edges={['top']}>
         <View style={styles.loadingContainer}>
-          <ActivityIndicator
-            size="large"
-            color="#C43D74"
-          />
+          <ActivityIndicator size="large" color="#C43D74" />
 
           <Text style={styles.loadingTitle}>
             Loading your profile
@@ -140,10 +124,10 @@ export default function ProfileScreen() {
         contentContainerStyle={styles.contentContainer}
         showsVerticalScrollIndicator={false}
       >
+        {/* ---------- Header ---------- */}
         <View style={styles.header}>
           <View>
             <Text style={styles.pageTitle}>Profile</Text>
-
             <Text style={styles.pageSubtitle}>
               Your account and safety resources
             </Text>
@@ -152,33 +136,27 @@ export default function ProfileScreen() {
           <View style={styles.headerIcon}>
             <Ionicons
               name="shield-checkmark-outline"
-              size={25}
+              size={24}
               color="#A92F61"
             />
           </View>
         </View>
 
+        {/* ---------- Profile card ---------- */}
         <View style={styles.profileCard}>
-          <View style={styles.avatar}>
-            <Text style={styles.avatarText}>
-              {initials}
-            </Text>
+          <View style={styles.avatarRing}>
+            <View style={styles.avatar}>
+              <Text style={styles.avatarText}>{initials}</Text>
+            </View>
           </View>
 
-          <Text style={styles.displayName}>
-            {displayName}
-          </Text>
-
-          <Text style={styles.displayEmail}>
-            {displayEmail}
-          </Text>
+          <Text style={styles.displayName}>{displayName}</Text>
+          <Text style={styles.displayEmail}>{displayEmail}</Text>
 
           <View
             style={[
               styles.accountBadge,
-              isGuest
-                ? styles.guestBadge
-                : styles.registeredBadge,
+              isGuest ? styles.guestBadge : styles.registeredBadge,
             ]}
           >
             <Ionicons
@@ -187,7 +165,7 @@ export default function ProfileScreen() {
                   ? 'person-outline'
                   : 'checkmark-circle-outline'
               }
-              size={17}
+              size={15}
               color={isGuest ? '#9A621F' : '#287550'}
             />
 
@@ -204,40 +182,43 @@ export default function ProfileScreen() {
           </View>
         </View>
 
-        {profileMissing && (
+        {/* ---------- Warnings ---------- */}
+        {profileMissing ? (
           <View style={styles.warningCard}>
-            <Ionicons
-              name="information-circle-outline"
-              size={22}
-              color="#A96C20"
-            />
+            <View style={styles.warningIconWrap}>
+              <Ionicons
+                name="information-circle-outline"
+                size={20}
+                color="#A96C20"
+              />
+            </View>
 
             <View style={styles.warningTextContainer}>
               <Text style={styles.warningTitle}>
                 Saved profile not found
               </Text>
-
               <Text style={styles.warningDescription}>
                 Your authentication details are shown as a fallback.
               </Text>
             </View>
           </View>
-        )}
+        ) : null}
 
-        {profileError && (
+        {profileError ? (
           <View style={styles.errorCard}>
-            <Ionicons
-              name="cloud-offline-outline"
-              size={22}
-              color="#B42318"
-            />
+            <View style={styles.errorIconWrap}>
+              <Ionicons
+                name="cloud-offline-outline"
+                size={20}
+                color="#B42318"
+              />
+            </View>
 
-            <Text style={styles.errorText}>
-              {profileError}
-            </Text>
+            <Text style={styles.errorText}>{profileError}</Text>
           </View>
-        )}
+        ) : null}
 
+        {/* ---------- Account info ---------- */}
         <View style={styles.section}>
           <Text style={styles.sectionTitle}>
             Account information
@@ -268,10 +249,9 @@ export default function ProfileScreen() {
           </View>
         </View>
 
+        {/* ---------- Safety ---------- */}
         <View style={styles.section}>
-          <Text style={styles.sectionTitle}>
-            Safety and support
-          </Text>
+          <Text style={styles.sectionTitle}>Safety and support</Text>
 
           <View style={styles.optionsCard}>
             <OptionRow
@@ -319,17 +299,16 @@ export default function ProfileScreen() {
           </View>
         </View>
 
+        {/* ---------- Logout ---------- */}
         <View style={styles.section}>
-          <Text style={styles.sectionTitle}>
-            Account actions
-          </Text>
+          <Text style={styles.sectionTitle}>Account actions</Text>
 
           <View style={styles.logoutCard}>
             <View style={styles.logoutHeader}>
               <View style={styles.logoutIcon}>
                 <Ionicons
                   name="log-out-outline"
-                  size={23}
+                  size={22}
                   color="#A92F61"
                 />
               </View>
@@ -338,10 +317,9 @@ export default function ProfileScreen() {
                 <Text style={styles.logoutTitle}>
                   Ready to leave?
                 </Text>
-
                 <Text style={styles.logoutDescription}>
-                  You will need to log in or continue as a guest to
-                  access SafeHer again.
+                  You will need to log in or continue as a guest to access
+                  SafeHer again.
                 </Text>
               </View>
             </View>
@@ -364,29 +342,16 @@ type InformationRowProps = {
   value: string;
 };
 
-function InformationRow({
-  icon,
-  label,
-  value,
-}: InformationRowProps) {
+function InformationRow({ icon, label, value }: InformationRowProps) {
   return (
     <View style={styles.informationRow}>
       <View style={styles.rowIconContainer}>
-        <Ionicons
-          name={icon}
-          size={21}
-          color="#A92F61"
-        />
+        <Ionicons name={icon} size={20} color="#A92F61" />
       </View>
 
       <View style={styles.rowTextContainer}>
-        <Text style={styles.rowLabel}>
-          {label}
-        </Text>
-
-        <Text style={styles.rowValue}>
-          {value}
-        </Text>
+        <Text style={styles.rowLabel}>{label}</Text>
+        <Text style={styles.rowValue}>{value}</Text>
       </View>
     </View>
   );
@@ -399,12 +364,7 @@ type OptionRowProps = {
   onPress: () => void;
 };
 
-function OptionRow({
-  icon,
-  title,
-  description,
-  onPress,
-}: OptionRowProps) {
+function OptionRow({ icon, title, description, onPress }: OptionRowProps) {
   return (
     <Pressable
       style={({ pressed }) => [
@@ -417,28 +377,17 @@ function OptionRow({
       accessibilityHint={`Open ${title}`}
     >
       <View style={styles.rowIconContainer}>
-        <Ionicons
-          name={icon}
-          size={21}
-          color="#A92F61"
-        />
+        <Ionicons name={icon} size={20} color="#A92F61" />
       </View>
 
       <View style={styles.rowTextContainer}>
-        <Text style={styles.optionTitle}>
-          {title}
-        </Text>
-
-        <Text style={styles.optionDescription}>
-          {description}
-        </Text>
+        <Text style={styles.optionTitle}>{title}</Text>
+        <Text style={styles.optionDescription}>{description}</Text>
       </View>
 
-      <Ionicons
-        name="chevron-forward"
-        size={21}
-        color="#9A8790"
-      />
+      <View style={styles.optionChevron}>
+        <Ionicons name="chevron-forward" size={17} color="#A92F61" />
+      </View>
     </Pressable>
   );
 }
@@ -456,9 +405,10 @@ const styles = StyleSheet.create({
 
   contentContainer: {
     paddingHorizontal: 20,
-    paddingBottom: 34,
+    paddingBottom: 36,
   },
 
+  /* ---------- Loading ---------- */
   loadingContainer: {
     flex: 1,
     justifyContent: 'center',
@@ -482,17 +432,20 @@ const styles = StyleSheet.create({
     textAlign: 'center',
   },
 
+  /* ---------- Header ---------- */
   header: {
     minHeight: 76,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
+    paddingTop: 6,
   },
 
   pageTitle: {
     color: '#392631',
-    fontSize: 27,
-    fontWeight: '800',
+    fontSize: 26,
+    fontWeight: '900',
+    letterSpacing: -0.3,
   },
 
   pageSubtitle: {
@@ -508,8 +461,11 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     borderRadius: 15,
     backgroundColor: '#F9E4EE',
+    borderWidth: 1,
+    borderColor: '#F1DDE6',
   },
 
+  /* ---------- Profile card ---------- */
   profileCard: {
     alignItems: 'center',
     marginTop: 10,
@@ -518,37 +474,53 @@ const styles = StyleSheet.create({
     borderColor: '#F1DDE6',
     borderRadius: 24,
     backgroundColor: '#FFFFFF',
+    shadowColor: '#C43D74',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.08,
+    shadowRadius: 12,
+    elevation: 2,
+  },
+
+  avatarRing: {
+    padding: 5,
+    borderRadius: 50,
+    backgroundColor: '#F9E4EE',
   },
 
   avatar: {
-    width: 88,
-    height: 88,
+    width: 84,
+    height: 84,
     alignItems: 'center',
     justifyContent: 'center',
-    borderRadius: 44,
+    borderRadius: 42,
     backgroundColor: '#C43D74',
-    borderWidth: 5,
-    borderColor: '#F9E4EE',
+    shadowColor: '#C43D74',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.35,
+    shadowRadius: 10,
+    elevation: 4,
   },
 
   avatarText: {
     color: '#FFFFFF',
     fontSize: 30,
-    fontWeight: '800',
+    fontWeight: '900',
+    letterSpacing: 0.5,
   },
 
   displayName: {
-    marginTop: 15,
+    marginTop: 16,
     color: '#392631',
-    fontSize: 22,
-    fontWeight: '800',
+    fontSize: 21,
+    fontWeight: '900',
     textAlign: 'center',
+    letterSpacing: -0.2,
   },
 
   displayEmail: {
     marginTop: 5,
     color: '#755F6A',
-    fontSize: 14,
+    fontSize: 13.5,
     textAlign: 'center',
   },
 
@@ -572,7 +544,8 @@ const styles = StyleSheet.create({
 
   accountBadgeText: {
     fontSize: 12,
-    fontWeight: '700',
+    fontWeight: '800',
+    letterSpacing: 0.1,
   },
 
   guestBadgeText: {
@@ -583,16 +556,26 @@ const styles = StyleSheet.create({
     color: '#287550',
   },
 
+  /* ---------- Warning / Error ---------- */
   warningCard: {
     flexDirection: 'row',
-    alignItems: 'flex-start',
-    gap: 10,
+    alignItems: 'center',
+    gap: 11,
     marginTop: 16,
     padding: 14,
     borderRadius: 16,
     backgroundColor: '#FFF3DE',
     borderWidth: 1,
     borderColor: '#F5DCAE',
+  },
+
+  warningIconWrap: {
+    width: 38,
+    height: 38,
+    borderRadius: 12,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: '#FFFFFF',
   },
 
   warningTextContainer: {
@@ -614,8 +597,8 @@ const styles = StyleSheet.create({
 
   errorCard: {
     flexDirection: 'row',
-    alignItems: 'flex-start',
-    gap: 10,
+    alignItems: 'center',
+    gap: 11,
     marginTop: 16,
     padding: 14,
     borderRadius: 16,
@@ -624,30 +607,48 @@ const styles = StyleSheet.create({
     borderColor: '#FDA29B',
   },
 
+  errorIconWrap: {
+    width: 38,
+    height: 38,
+    borderRadius: 12,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: '#FFFFFF',
+  },
+
   errorText: {
     flex: 1,
     color: '#B42318',
-    fontSize: 13,
-    lineHeight: 19,
+    fontSize: 12.5,
+    lineHeight: 18,
+    fontWeight: '600',
   },
 
+  /* ---------- Section ---------- */
   section: {
-    marginTop: 25,
+    marginTop: 26,
   },
 
   sectionTitle: {
-    marginBottom: 11,
+    marginBottom: 12,
     color: '#392631',
-    fontSize: 17,
-    fontWeight: '800',
+    fontSize: 16.5,
+    fontWeight: '900',
+    letterSpacing: -0.1,
   },
 
+  /* ---------- Information card ---------- */
   informationCard: {
     paddingHorizontal: 16,
     borderWidth: 1,
     borderColor: '#F1DDE6',
     borderRadius: 20,
     backgroundColor: '#FFFFFF',
+    shadowColor: '#C43D74',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.05,
+    shadowRadius: 6,
+    elevation: 1,
   },
 
   informationRow: {
@@ -672,15 +673,17 @@ const styles = StyleSheet.create({
 
   rowLabel: {
     color: '#876F7A',
-    fontSize: 12,
-    fontWeight: '600',
+    fontSize: 11.5,
+    fontWeight: '700',
+    letterSpacing: 0.3,
+    textTransform: 'uppercase',
   },
 
   rowValue: {
-    marginTop: 3,
+    marginTop: 4,
     color: '#392631',
     fontSize: 14,
-    fontWeight: '700',
+    fontWeight: '800',
   },
 
   divider: {
@@ -688,12 +691,18 @@ const styles = StyleSheet.create({
     backgroundColor: '#F3E7EC',
   },
 
+  /* ---------- Options card ---------- */
   optionsCard: {
     paddingHorizontal: 16,
     borderWidth: 1,
     borderColor: '#F1DDE6',
     borderRadius: 20,
     backgroundColor: '#FFFFFF',
+    shadowColor: '#C43D74',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.05,
+    shadowRadius: 6,
+    elevation: 1,
   },
 
   optionRow: {
@@ -719,17 +728,34 @@ const styles = StyleSheet.create({
     lineHeight: 17,
   },
 
+  optionChevron: {
+    width: 30,
+    height: 30,
+    borderRadius: 15,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: '#F9E4EE',
+    marginLeft: 6,
+  },
+
+  /* ---------- Logout ---------- */
   logoutCard: {
     padding: 16,
     borderWidth: 1,
     borderColor: '#E5B8CA',
     borderRadius: 20,
     backgroundColor: '#FFF0F5',
+    shadowColor: '#C43D74',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.06,
+    shadowRadius: 6,
+    elevation: 1,
   },
 
   logoutHeader: {
     flexDirection: 'row',
     alignItems: 'center',
+    marginBottom: 12,
   },
 
   logoutIcon: {
@@ -749,7 +775,7 @@ const styles = StyleSheet.create({
   logoutTitle: {
     color: '#742443',
     fontSize: 15,
-    fontWeight: '800',
+    fontWeight: '900',
   },
 
   logoutDescription: {
@@ -759,10 +785,13 @@ const styles = StyleSheet.create({
     lineHeight: 17,
   },
 
+  /* ---------- Footer ---------- */
   footerText: {
-    marginTop: 28,
+    marginTop: 30,
     color: '#A08D96',
-    fontSize: 12,
+    fontSize: 11.5,
     textAlign: 'center',
+    fontWeight: '600',
+    letterSpacing: 0.2,
   },
 });

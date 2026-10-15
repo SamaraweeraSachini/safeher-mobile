@@ -1,7 +1,16 @@
 import { Ionicons } from '@expo/vector-icons';
-import { type Href, useRouter } from 'expo-router';
-import { useState } from 'react';
+
 import {
+  type Href,
+  useRouter,
+} from 'expo-router';
+
+import {
+  useState,
+} from 'react';
+
+import {
+  ActivityIndicator,
   Alert,
   Pressable,
   ScrollView,
@@ -10,83 +19,146 @@ import {
   Text,
   View,
 } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
 
-import { usePrivacyPreferences } from '@/src/context/PrivacyPreferencesContext';
-import type { PrivacyPreferences } from '@/src/services/privacy-preferences';
+import {
+  SafeAreaView,
+} from 'react-native-safe-area-context';
+
+import {
+  Brand,
+} from '@/constants/brand';
+
+import ScreenBackButton from '@/src/components/navigation/ScreenBackButton';
+
+import {
+  usePrivacyPreferences,
+  type PrivacyPreferences,
+} from '@/src/context/PrivacyPreferencesContext';
 
 type SettingKey = keyof PrivacyPreferences;
 
-type SettingRow = {
+type SettingItem = {
   key: SettingKey;
   title: string;
   description: string;
+  icon: keyof typeof Ionicons.glyphMap;
 };
 
-const SETTINGS: SettingRow[] = [
+const SETTINGS: SettingItem[] = [
   {
     key: 'anonymousReportingByDefault',
-    title: 'Anonymous reporting',
+    title: 'Anonymous reporting by default',
     description:
-      'New incident reports start as anonymous. You can still change this on the report form before you submit.',
+      'New incident reports start with anonymous reporting enabled. You can still change it on the report form.',
+    icon: 'eye-off-outline',
   },
   {
     key: 'allowLocationUse',
-    title: 'Use location',
+    title: 'Allow location use',
     description:
-      'Allow SafeHer to use your location for the map, reports, and routes while the app is open.',
+      'Allows SafeHer features such as incident reporting, Safe Route, SOS and Safe Journey to request your current location.',
+    icon: 'location-outline',
   },
   {
     key: 'showReportHistory',
-    title: 'Report history',
+    title: 'Show report history shortcuts',
     description:
-      'Show recent incident reports. When this is off, the report history is hidden.',
+      'Shows report-history and recent-report shortcuts in relevant parts of SafeHer.',
+    icon: 'time-outline',
   },
   {
     key: 'shareJourneys',
     title: 'Journey sharing',
     description:
-      'Show the trusted contacts a journey is shared with. When this is off, those names stay hidden.',
+      'Allows Safe Journey to display and use trusted-contact sharing information.',
+    icon: 'people-outline',
   },
   {
     key: 'safetyAlerts',
     title: 'Safety alerts',
     description:
-      'Show journey check-in reminders. When this is off, the next check-in time is hidden.',
+      'Allows recent incident information to appear as safety updates on the Home screen.',
+    icon: 'notifications-outline',
   },
 ];
 
 export default function PrivacySettingsScreen() {
   const router = useRouter();
-  const { preferences, updatePreference, clearSavedPreferences } =
-    usePrivacyPreferences();
-  const [clearMessage, setClearMessage] = useState<string | null>(null);
 
-  const changeSetting = (key: SettingKey, value: boolean) => {
-    setClearMessage(null);
-    void updatePreference(key, value);
+  const {
+    preferences,
+    isReady,
+    updatePreference,
+    clearSavedPreferences,
+  } = usePrivacyPreferences();
+
+  const [savingKey, setSavingKey] = useState<SettingKey | null>(null);
+  const [clearing, setClearing] = useState(false);
+
+  const handleChange = async (key: SettingKey, value: boolean) => {
+    try {
+      setSavingKey(key);
+      await updatePreference(key, value);
+    } catch (error) {
+      console.error('Privacy preference update failed:', error);
+      Alert.alert(
+        'Could not save setting',
+        'The privacy preference could not be saved. Please try again.'
+      );
+    } finally {
+      setSavingKey(null);
+    }
   };
 
   const confirmClear = () => {
     Alert.alert(
-      'Clear saved preferences?',
-      'This removes the privacy choices stored on this phone and returns them to the original settings.',
+      'Reset privacy preferences?',
+      'Your locally saved SafeHer privacy preferences will return to their default values. This will not delete your account, reports, trusted contacts or journeys from Firebase.',
       [
-        { text: 'Keep settings', style: 'cancel' },
+        { text: 'Keep Settings', style: 'cancel' },
         {
-          text: 'Clear preferences',
+          text: 'Reset Preferences',
           style: 'destructive',
           onPress: () => {
-            void clearSavedPreferences().then(() => {
-              setClearMessage(
-                'Saved privacy preferences were cleared on this phone.'
-              );
-            });
+            void handleClear();
           },
         },
       ]
     );
   };
+
+  const handleClear = async () => {
+    try {
+      setClearing(true);
+      await clearSavedPreferences();
+
+      Alert.alert(
+        'Preferences reset',
+        'Your local privacy preferences have been restored to the SafeHer defaults.'
+      );
+    } catch (error) {
+      console.error('Privacy reset failed:', error);
+      Alert.alert(
+        'Reset failed',
+        'SafeHer could not reset the preferences. Please try again.'
+      );
+    } finally {
+      setClearing(false);
+    }
+  };
+
+  if (!isReady) {
+    return (
+      <SafeAreaView style={styles.safeArea}>
+        <View style={styles.loadingState}>
+          <ActivityIndicator size="large" color={Brand.burgundy} />
+          <Text style={styles.loadingText}>
+            Loading privacy settings...
+          </Text>
+        </View>
+      </SafeAreaView>
+    );
+  }
 
   return (
     <SafeAreaView style={styles.safeArea} edges={['top']}>
@@ -94,158 +166,489 @@ export default function PrivacySettingsScreen() {
         contentContainerStyle={styles.content}
         showsVerticalScrollIndicator={false}
       >
-        <Pressable
-          style={styles.backButton}
-          onPress={() => router.back()}
-          accessibilityRole="button"
-          accessibilityLabel="Return to Profile"
-        >
-          <Ionicons name="arrow-back" size={24} color="#5A3D4D" />
-          <Text style={styles.backText}>Profile</Text>
-        </Pressable>
+        <ScreenBackButton label="Back" />
 
-        <Text style={styles.title}>Privacy Settings</Text>
-        <Text style={styles.introduction}>
-          These choices change how SafeHer uses your information on this phone.
-        </Text>
-
-        {SETTINGS.map((setting) => (
-          <View key={setting.key} style={styles.settingCard}>
-            <View style={styles.settingText}>
-              <Text style={styles.settingTitle}>{setting.title}</Text>
-              <Text style={styles.settingDescription}>{setting.description}</Text>
-            </View>
-            <Switch
-              value={preferences[setting.key]}
-              onValueChange={(value) => changeSetting(setting.key, value)}
-              trackColor={{ false: '#E9D7DD', true: '#E8A6B9' }}
-              thumbColor={preferences[setting.key] ? '#7A1F3D' : '#FFFFFF'}
-              accessibilityLabel={setting.title}
+        {/* ---------- Header ---------- */}
+        <View style={styles.header}>
+          <View style={styles.headerIcon}>
+            <Ionicons
+              name="shield-checkmark-outline"
+              size={24}
+              color={Brand.white}
             />
           </View>
-        ))}
 
-        <Pressable
-          style={({ pressed }) => [
-            styles.clearButton,
-            pressed && styles.pressed,
-          ]}
-          onPress={confirmClear}
-          accessibilityRole="button"
-          accessibilityLabel="Clear saved preferences"
-        >
-          <Ionicons name="trash-outline" size={20} color="#A92F61" />
-          <View style={styles.clearText}>
-            <Text style={styles.clearTitle}>Clear saved preferences</Text>
-            <Text style={styles.clearDescription}>
-              Removes the privacy choices stored on this phone.
+          <View style={{ flex: 1 }}>
+            <Text style={styles.title}>Privacy Settings</Text>
+            <Text style={styles.subtitle}>
+              Choose how SafeHer uses local preferences and safety
+              features.
             </Text>
           </View>
-        </Pressable>
+        </View>
 
-        {clearMessage ? (
-          <Text style={styles.clearMessage}>{clearMessage}</Text>
-        ) : null}
+        {/* ---------- Notice ---------- */}
+        <View style={styles.notice}>
+          <View style={styles.noticeIconWrap}>
+            <Ionicons
+              name="information-circle-outline"
+              size={18}
+              color={Brand.burgundy}
+            />
+          </View>
+
+          <Text style={styles.noticeText}>
+            These controls affect real app behaviour. They are not
+            decorative switches.
+          </Text>
+        </View>
+
+        {/* ---------- Preferences ---------- */}
+        <Text style={styles.sectionTitle}>Your preferences</Text>
+
+        {SETTINGS.map(setting => {
+          const value = preferences[setting.key];
+          const saving = savingKey === setting.key;
+
+          return (
+            <View key={setting.key} style={styles.settingCard}>
+              <View style={styles.settingIcon}>
+                <Ionicons
+                  name={setting.icon}
+                  size={21}
+                  color={Brand.burgundy}
+                />
+              </View>
+
+              <View style={styles.settingText}>
+                <Text style={styles.settingTitle}>{setting.title}</Text>
+
+                <Text style={styles.settingDescription}>
+                  {setting.description}
+                </Text>
+
+                <View
+                  style={[
+                    styles.statusPill,
+                    value ? styles.statusPillOn : styles.statusPillOff,
+                  ]}
+                >
+                  <View
+                    style={[
+                      styles.statusDot,
+                      value ? styles.statusDotOn : styles.statusDotOff,
+                    ]}
+                  />
+                  <Text
+                    style={[
+                      styles.statusText,
+                      value ? styles.statusOn : styles.statusOff,
+                    ]}
+                  >
+                    {value ? 'On' : 'Off'}
+                  </Text>
+                </View>
+              </View>
+
+              {saving ? (
+                <ActivityIndicator color={Brand.burgundy} />
+              ) : (
+                <Switch
+                  value={value}
+                  onValueChange={nextValue => {
+                    void handleChange(setting.key, nextValue);
+                  }}
+                  trackColor={{
+                    false: Brand.line,
+                    true: Brand.roseSoft,
+                  }}
+                  thumbColor={value ? Brand.burgundy : '#FFFFFF'}
+                />
+              )}
+            </View>
+          );
+        })}
+
+        {/* ---------- Learn more ---------- */}
+        <Text style={styles.sectionTitle}>Understand your privacy</Text>
 
         <Pressable
           style={({ pressed }) => [
-            styles.infoButton,
+            styles.navigationCard,
             pressed && styles.pressed,
           ]}
           onPress={() => router.push('/privacy-safety' as Href)}
-          accessibilityRole="button"
-          accessibilityLabel="Privacy information"
         >
-          <Ionicons name="information-circle-outline" size={22} color="#A92F61" />
-          <View style={styles.clearText}>
-            <Text style={styles.clearTitle}>Privacy information</Text>
-            <Text style={styles.clearDescription}>
-              Read how SafeHer handles personal information.
+          <View style={styles.navigationIcon}>
+            <Ionicons
+              name="lock-closed-outline"
+              size={22}
+              color={Brand.burgundy}
+            />
+          </View>
+
+          <View style={{ flex: 1 }}>
+            <Text style={styles.navigationTitle}>
+              Privacy & Safety Information
+            </Text>
+            <Text style={styles.navigationDescription}>
+              Learn what information SafeHer uses and how each safety
+              feature works.
             </Text>
           </View>
-          <Ionicons name="chevron-forward" size={20} color="#9A8790" />
+
+          <Ionicons
+            name="chevron-forward"
+            size={20}
+            color={Brand.burgundy}
+          />
         </Pressable>
+
+        {/* ---------- Reset ---------- */}
+        <View style={styles.resetSection}>
+          <View style={styles.resetHeaderRow}>
+            <View style={styles.resetIconWrap}>
+              <Ionicons
+                name="warning-outline"
+                size={18}
+                color="#912018"
+              />
+            </View>
+            <Text style={styles.resetTitle}>
+              Reset local preferences
+            </Text>
+          </View>
+
+          <Text style={styles.resetDescription}>
+            This resets only locally saved preferences. Your Firebase
+            account data, incidents, contacts and journeys are not
+            deleted.
+          </Text>
+
+          <Pressable
+            style={({ pressed }) => [
+              styles.resetButton,
+              clearing && styles.disabled,
+              pressed && !clearing && styles.pressed,
+            ]}
+            disabled={clearing}
+            onPress={confirmClear}
+          >
+            {clearing ? (
+              <ActivityIndicator color="#B42318" />
+            ) : (
+              <Ionicons
+                name="refresh-outline"
+                size={19}
+                color="#B42318"
+              />
+            )}
+
+            <Text style={styles.resetButtonText}>
+              {clearing ? 'Resetting...' : 'Reset Privacy Preferences'}
+            </Text>
+          </Pressable>
+        </View>
       </ScrollView>
     </SafeAreaView>
   );
 }
 
 const styles = StyleSheet.create({
-  safeArea: { flex: 1, backgroundColor: '#FFF8FB' },
-  content: { paddingHorizontal: 20, paddingBottom: 36 },
-  backButton: {
-    minHeight: 54,
+  safeArea: {
+    flex: 1,
+    backgroundColor: Brand.cream,
+  },
+
+  loadingState: {
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+
+  loadingText: {
+    marginTop: 10,
+    color: Brand.muted,
+  },
+
+  content: {
+    paddingHorizontal: 20,
+    paddingTop: 12,
+    paddingBottom: 44,
+  },
+
+  /* ---------- Header ---------- */
+  header: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+    marginTop: 6,
+    marginBottom: 16,
+  },
+
+  headerIcon: {
+    width: 50,
+    height: 50,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderRadius: 16,
+    backgroundColor: Brand.burgundy,
+    shadowColor: Brand.burgundy,
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.25,
+    shadowRadius: 8,
+    elevation: 3,
+  },
+
+  title: {
+    color: Brand.ink,
+    fontSize: 24,
+    fontWeight: '900',
+    letterSpacing: -0.3,
+  },
+
+  subtitle: {
+    marginTop: 4,
+    color: Brand.muted,
+    fontSize: 12,
+    lineHeight: 17,
+  },
+
+  /* ---------- Notice ---------- */
+  notice: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+    padding: 13,
+    marginBottom: 22,
+    borderWidth: 1,
+    borderColor: Brand.roseSoft,
+    borderRadius: 16,
+    backgroundColor: Brand.blush,
+  },
+
+  noticeIconWrap: {
+    width: 30,
+    height: 30,
+    borderRadius: 10,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: '#FFFFFF',
+  },
+
+  noticeText: {
+    flex: 1,
+    color: Brand.burgundyDeep,
+    fontSize: 12,
+    lineHeight: 18,
+    fontWeight: '600',
+  },
+
+  /* ---------- Section ---------- */
+  sectionTitle: {
+    marginBottom: 12,
+    color: Brand.ink,
+    fontSize: 16.5,
+    fontWeight: '900',
+    letterSpacing: -0.1,
+  },
+
+  /* ---------- Setting card ---------- */
+  settingCard: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 11,
+    padding: 14,
+    marginBottom: 10,
+    borderWidth: 1,
+    borderColor: Brand.line,
+    borderRadius: 18,
+    backgroundColor: Brand.white,
+    shadowColor: '#4E1026',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.04,
+    shadowRadius: 6,
+    elevation: 1,
+  },
+
+  settingIcon: {
+    width: 44,
+    height: 44,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderRadius: 14,
+    backgroundColor: Brand.blush,
+    borderWidth: 1,
+    borderColor: Brand.roseSoft,
+  },
+
+  settingText: {
+    flex: 1,
+  },
+
+  settingTitle: {
+    color: Brand.ink,
+    fontSize: 13.5,
+    fontWeight: '800',
+  },
+
+  settingDescription: {
+    marginTop: 4,
+    color: Brand.muted,
+    fontSize: 11,
+    lineHeight: 16,
+  },
+
+  statusPill: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 5,
     alignSelf: 'flex-start',
+    marginTop: 7,
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: 8,
+  },
+
+  statusPillOn: {
+    backgroundColor: '#E8F5ED',
+  },
+
+  statusPillOff: {
+    backgroundColor: '#F5EDEF',
+  },
+
+  statusDot: {
+    width: 6,
+    height: 6,
+    borderRadius: 3,
+  },
+
+  statusDotOn: {
+    backgroundColor: '#287550',
+  },
+
+  statusDotOff: {
+    backgroundColor: '#8B5555',
+  },
+
+  statusText: {
+    fontSize: 10,
+    fontWeight: '900',
+    letterSpacing: 0.4,
+  },
+
+  statusOn: {
+    color: '#287550',
+  },
+
+  statusOff: {
+    color: '#8B5555',
+  },
+
+  /* ---------- Navigation card ---------- */
+  navigationCard: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 11,
+    padding: 15,
+    marginBottom: 22,
+    borderWidth: 1,
+    borderColor: Brand.line,
+    borderRadius: 18,
+    backgroundColor: Brand.white,
+    shadowColor: '#4E1026',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.04,
+    shadowRadius: 6,
+    elevation: 1,
+  },
+
+  navigationIcon: {
+    width: 46,
+    height: 46,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderRadius: 15,
+    backgroundColor: Brand.blush,
+    borderWidth: 1,
+    borderColor: Brand.roseSoft,
+  },
+
+  navigationTitle: {
+    color: Brand.ink,
+    fontSize: 14,
+    fontWeight: '800',
+  },
+
+  navigationDescription: {
+    marginTop: 4,
+    color: Brand.muted,
+    fontSize: 11.5,
+    lineHeight: 16,
+  },
+
+  /* ---------- Reset ---------- */
+  resetSection: {
+    padding: 16,
+    borderWidth: 1,
+    borderColor: '#FDA29B',
+    borderRadius: 18,
+    backgroundColor: '#FEF3F2',
+  },
+
+  resetHeaderRow: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 8,
   },
-  backText: { color: '#5A3D4D', fontSize: 15, fontWeight: '700' },
-  title: {
-    marginTop: 8,
-    color: '#392631',
-    fontSize: 27,
-    fontWeight: '800',
+
+  resetIconWrap: {
+    width: 30,
+    height: 30,
+    borderRadius: 10,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: '#FFFFFF',
   },
-  introduction: {
-    marginTop: 8,
-    marginBottom: 18,
-    color: '#755F6A',
+
+  resetTitle: {
+    color: '#912018',
     fontSize: 15,
-    lineHeight: 22,
+    fontWeight: '900',
   },
-  settingCard: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 12,
-    marginBottom: 12,
-    padding: 16,
-    borderWidth: 1,
-    borderColor: '#F1DDE6',
-    borderRadius: 18,
-    backgroundColor: '#FFFFFF',
-  },
-  settingText: { flex: 1 },
-  settingTitle: { color: '#392631', fontSize: 15, fontWeight: '800' },
-  settingDescription: {
-    marginTop: 4,
-    color: '#755F6A',
-    fontSize: 13,
-    lineHeight: 19,
-  },
-  clearButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 12,
+
+  resetDescription: {
     marginTop: 8,
-    padding: 16,
-    borderRadius: 18,
-    backgroundColor: '#FDECEC',
+    color: '#7A4A46',
+    fontSize: 11.5,
+    lineHeight: 17,
   },
-  infoButton: {
+
+  resetButton: {
+    minHeight: 50,
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 12,
-    marginTop: 12,
-    padding: 16,
-    borderWidth: 1,
-    borderColor: '#F1DDE6',
-    borderRadius: 18,
+    justifyContent: 'center',
+    gap: 8,
+    marginTop: 14,
+    borderWidth: 1.5,
+    borderColor: '#B42318',
+    borderRadius: 14,
     backgroundColor: '#FFFFFF',
   },
-  clearText: { flex: 1 },
-  clearTitle: { color: '#392631', fontSize: 15, fontWeight: '800' },
-  clearDescription: {
-    marginTop: 4,
-    color: '#755F6A',
-    fontSize: 13,
-    lineHeight: 19,
+
+  resetButtonText: {
+    color: '#B42318',
+    fontWeight: '900',
+    fontSize: 13.5,
   },
-  clearMessage: {
-    marginTop: 12,
-    color: '#35735A',
-    fontSize: 14,
-    lineHeight: 20,
+
+  disabled: {
+    opacity: 0.55,
   },
-  pressed: { opacity: 0.75 },
+
+  pressed: {
+    opacity: 0.78,
+  },
 });
