@@ -4,9 +4,14 @@ import {
   useState,
 } from 'react';
 
+import { useAuth } from '@/src/context/AuthContext';
 import {
   subscribeToActiveIncidents,
 } from '@/src/services/incident-service';
+import {
+  ensureWithdrawalNotices,
+  subscribeToRemovedReportIds,
+} from '@/src/services/report-withdrawal-service';
 
 import type {
   Incident,
@@ -26,6 +31,8 @@ let sharedLastUpdatedAt: Date | null = null;
  * Maintains a real-time subscription to active Firestore incidents.
  */
 export function useActiveIncidents() {
+  const { user, isRegisteredUser } = useAuth();
+  const [removedReportIds, setRemovedReportIds] = useState<string[]>([]);
   const [incidents, setIncidents] =
     useState<Incident[]>(sharedIncidents ?? []);
 
@@ -57,6 +64,23 @@ export function useActiveIncidents() {
       current => current + 1
     );
   }, []);
+
+  useEffect(() => {
+    if (!isRegisteredUser || !user) {
+      setRemovedReportIds([]);
+      return;
+    }
+
+    return subscribeToRemovedReportIds(user.uid, setRemovedReportIds);
+  }, [isRegisteredUser, user]);
+
+  useEffect(() => {
+    if (!isRegisteredUser || !user || removedReportIds.length === 0) {
+      return;
+    }
+
+    void ensureWithdrawalNotices(user.uid, removedReportIds);
+  }, [isRegisteredUser, removedReportIds, user]);
 
   useEffect(() => {
     let listenerIsActive = true;
@@ -111,8 +135,10 @@ export function useActiveIncidents() {
     };
   }, [refreshKey]);
 
+  const removedIds = new Set(removedReportIds);
+
   return {
-    incidents,
+    incidents: incidents.filter((incident) => !removedIds.has(incident.id)),
     isLoading,
     error,
     retry,

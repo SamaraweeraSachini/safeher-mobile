@@ -28,8 +28,77 @@ import type {
 const ACTIVE_INCIDENT_LIMIT =
   50;
 
+const WITHDRAWAL_NOTICE_PREFIX =
+  'safeher-withdrawn:';
+
 let submissionInProgress =
   false;
+
+/*
+ * Withdrawal notices are kept in Firestore so every client,
+ * including guests, can determine that an incident should no
+ * longer appear on the public map.
+ */
+export function withdrawnReportId(
+  data:
+    Record<
+      string,
+      unknown
+    >
+): string | null {
+  const storedId =
+    data.withdrawnIncidentId;
+
+  if (
+    data.recordType ===
+      'withdrawal' &&
+    typeof storedId ===
+      'string' &&
+    storedId
+      .trim()
+      .length >
+      0
+  ) {
+    return storedId.trim();
+  }
+
+  /*
+   * Backwards-compatible fallback for withdrawal records
+   * stored using the special description prefix.
+   */
+  if (
+    typeof data.description ===
+      'string' &&
+    data.description.startsWith(
+      WITHDRAWAL_NOTICE_PREFIX
+    )
+  ) {
+    const reportId =
+      data.description
+        .slice(
+          WITHDRAWAL_NOTICE_PREFIX.length
+        )
+        .trim();
+
+    return reportId.length >
+      0
+      ? reportId
+      : null;
+  }
+
+  return null;
+}
+
+/*
+ * Creates the legacy-compatible withdrawal marker text used
+ * by report-withdrawal functionality elsewhere in SafeHer.
+ */
+export function withdrawalNoticeDescription(
+  reportId:
+    string
+): string {
+  return `${WITHDRAWAL_NOTICE_PREFIX}${reportId}`;
+}
 
 export class IncidentSubmissionError extends Error {
   code:
@@ -151,8 +220,10 @@ function convertCreatedAt(
   | null
   | undefined {
   if (
-    value === null ||
-    value === undefined
+    value ===
+      null ||
+    value ===
+      undefined
   ) {
     return null;
   }
@@ -163,6 +234,10 @@ function convertCreatedAt(
     : undefined;
 }
 
+/*
+ * Reads the human-readable address saved with newer reports.
+ * Older reports without an address still remain valid.
+ */
 function getAddress(
   data:
     Record<
@@ -203,6 +278,11 @@ function isReportStatus(
   );
 }
 
+/*
+ * Converts one Firestore document into SafeHer's Incident
+ * model. `requireActive` is used for map incidents while
+ * My Reports can display the full report lifecycle.
+ */
 function convertDocument(
   id:
     string,
@@ -216,6 +296,19 @@ function convertDocument(
   requireActive:
     boolean
 ): Incident | null {
+  /*
+   * Withdrawal marker documents are metadata, not actual
+   * incident reports, so never convert them into map/report
+   * cards.
+   */
+  if (
+    withdrawnReportId(
+      data
+    )
+  ) {
+    return null;
+  }
+
   if (
     !id ||
     !isIncidentCategoryId(
@@ -234,7 +327,11 @@ function convertDocument(
     typeof data.anonymous !==
       'boolean' ||
     typeof data.creatorUid !==
-      'string'
+      'string' ||
+    data.creatorUid
+      .trim()
+      .length ===
+      0
   ) {
     return null;
   }
@@ -286,6 +383,10 @@ function convertDocument(
   };
 }
 
+/*
+ * Converts a Firestore document that is expected to represent
+ * an active map incident.
+ */
 export function convertIncidentDocument(
   id:
     string,
@@ -322,6 +423,108 @@ function sortIncidentsByNewest(
   );
 }
 
+/*
+ * Removes duplicate incidents by Firestore document ID.
+ */
+function removeDuplicateIncidents(
+  incidents:
+    Incident[]
+): Incident[] {
+  const unique =
+    new Map<
+      string,
+      Incident
+    >();
+
+  incidents.forEach(
+    incident => {
+      unique.set(
+        incident.id,
+        incident
+      );
+    }
+  );
+
+  return Array.from(
+    unique.values()
+  );
+}
+
+/*
+ * Builds the incidents that should actually appear on the
+ * Safety Map.
+ *
+ * Withdrawal marker documents are collected first, then the
+ * matching incident IDs are removed from the visible list.
+ */
+export function visibleActiveIncidents(
+  documents:
+    {
+      id:
+        string;
+
+      data:
+        Record<
+          string,
+          unknown
+        >;
+    }[]
+): Incident[] {
+  const removedIds =
+    new Set<string>();
+
+  const incidents:
+    Incident[] = [];
+
+  documents.forEach(
+    document => {
+      const withdrawnIncidentId =
+        withdrawnReportId(
+          document.data
+        );
+
+      if (
+        withdrawnIncidentId
+      ) {
+        removedIds.add(
+          withdrawnIncidentId
+        );
+
+        return;
+      }
+
+      const incident =
+        convertIncidentDocument(
+          document.id,
+          document.data
+        );
+
+      if (
+        incident
+      ) {
+        incidents.push(
+          incident
+        );
+      }
+    }
+  );
+
+  return removeDuplicateIncidents(
+    incidents.filter(
+      incident =>
+        !removedIds.has(
+          incident.id
+        )
+    )
+  ).sort(
+    sortIncidentsByNewest
+  );
+}
+
+/*
+ * Real-time listener used by the Safety Map and other features
+ * that need currently active incident reports.
+ */
 export function subscribeToActiveIncidents(
   onIncidentsChanged:
     (
@@ -353,42 +556,24 @@ export function subscribeToActiveIncidents(
     activeQuery,
 
     snapshot => {
-      const incidentsById =
-        new Map<
-          string,
-          Incident
-        >();
-
-      snapshot.docs.forEach(
-        document => {
-          const incident =
-            convertIncidentDocument(
+      const documents =
+        snapshot.docs.map(
+          document => ({
+            id:
               document.id,
-              document.data()
-            );
 
-          if (
-            incident
-          ) {
-            incidentsById.set(
-              incident.id,
-              incident
-            );
-          }
-        }
-      );
+            data:
+              document.data(),
+          })
+        );
 
       const incidents =
-        Array.from(
-          incidentsById.values()
-        )
-          .sort(
-            sortIncidentsByNewest
-          )
-          .slice(
-            0,
-            ACTIVE_INCIDENT_LIMIT
-          );
+        visibleActiveIncidents(
+          documents
+        ).slice(
+          0,
+          ACTIVE_INCIDENT_LIMIT
+        );
 
       onIncidentsChanged(
         incidents
@@ -410,6 +595,12 @@ export function subscribeToActiveIncidents(
   );
 }
 
+/*
+ * Subscribes to every incident report created by one user.
+ *
+ * Unlike the Safety Map, this includes active,
+ * under-review, resolved and removed reports.
+ */
 export function subscribeToUserReports(
   userId:
     string,
@@ -485,6 +676,13 @@ export function subscribeToUserReports(
   );
 }
 
+/*
+ * Creates a new community incident report.
+ *
+ * Newer reports store both the GPS coordinates and an optional
+ * reverse-geocoded address. Coordinates remain necessary for
+ * Safety Map and Safe Route calculations.
+ */
 export async function createIncidentReport(
   input:
     CreateIncidentInput

@@ -31,7 +31,8 @@ import {
 } from '@/src/context/PrivacyPreferencesContext';
 
 export const unstable_settings = {
-  initialRouteName: 'splash',
+  initialRouteName:
+    'splash',
 };
 
 const SAFEHER_THEME = {
@@ -60,10 +61,14 @@ const SAFEHER_THEME = {
 function RootNavigator() {
   const {
     isAuthenticated,
+    isGuest,
     loading,
-  } = useAuth();
+  } =
+    useAuth();
 
-  if (loading) {
+  if (
+    loading
+  ) {
     return (
       <View
         style={
@@ -104,6 +109,7 @@ function RootNavigator() {
           name="splash"
         />
 
+        {/* Logged-out users */}
         <Stack.Protected
           guard={
             !isAuthenticated
@@ -116,12 +122,28 @@ function RootNavigator() {
           <Stack.Screen
             name="(onboarding)"
           />
+        </Stack.Protected>
 
+        {/*
+         * Authentication screens remain available to:
+         * - signed-out users
+         * - anonymous guest users
+         *
+         * This lets a guest later create an account
+         * or sign in with a registered account.
+         */}
+        <Stack.Protected
+          guard={
+            !isAuthenticated ||
+            isGuest
+          }
+        >
           <Stack.Screen
             name="(auth)"
           />
         </Stack.Protected>
 
+        {/* Main SafeHer application */}
         <Stack.Protected
           guard={
             isAuthenticated
@@ -172,7 +194,8 @@ export default function RootLayout() {
 const styles =
   StyleSheet.create({
     loadingContainer: {
-      flex: 1,
+      flex:
+        1,
 
       justifyContent:
         'center',

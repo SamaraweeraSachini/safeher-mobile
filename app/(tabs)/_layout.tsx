@@ -226,6 +226,13 @@ export default function TabLayout() {
       />
 
       <Tabs.Screen
+        name="safety-resources"
+        options={{
+          href: null,
+        }}
+      />
+
+      <Tabs.Screen
         name="report-confirmation"
         options={{
           href: null,
@@ -241,6 +248,13 @@ export default function TabLayout() {
 
       <Tabs.Screen
         name="my-reports"
+        options={{
+          href: null,
+        }}
+      />
+
+      <Tabs.Screen
+        name="report-details"
         options={{
           href: null,
         }}
