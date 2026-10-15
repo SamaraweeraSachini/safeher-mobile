@@ -1,21 +1,22 @@
 import { Ionicons } from '@expo/vector-icons';
+
 import {
-    Modal,
-    Pressable,
-    ScrollView,
-    StyleSheet,
-    Text,
-    View,
+  Modal,
+  Pressable,
+  ScrollView,
+  StyleSheet,
+  Text,
+  View,
 } from 'react-native';
 
 import {
-    getIncidentCategory,
-    getIncidentCategoryLabel,
+  getIncidentCategory,
+  getIncidentCategoryLabel,
 } from '@/constants/incident-categories';
 
 import type {
-    Incident,
-    IncidentStatus,
+  Incident,
+  IncidentStatus,
 } from '@/src/types/incident';
 
 type IncidentDetailsModalProps = {
@@ -24,31 +25,22 @@ type IncidentDetailsModalProps = {
   onClose: () => void;
 };
 
-function formatIncidentDate(
-  incident: Incident
-): string {
+function formatIncidentDate(incident: Incident): string {
   if (!incident.createdAt) {
     return 'Date and time unavailable';
   }
 
   try {
-    return incident.createdAt
-      .toDate()
-      .toLocaleString(
-        [],
-        {
-          dateStyle: 'medium',
-          timeStyle: 'short',
-        }
-      );
+    return incident.createdAt.toDate().toLocaleString([], {
+      dateStyle: 'medium',
+      timeStyle: 'short',
+    });
   } catch {
     return 'Date and time unavailable';
   }
 }
 
-function getStatusDetails(
-  status: IncidentStatus
-) {
+function getStatusDetails(status: IncidentStatus) {
   switch (status) {
     case 'under-review':
       return {
@@ -94,31 +86,14 @@ export default function IncidentDetailsModal({
     return null;
   }
 
-  const category =
-    getIncidentCategory(
-      incident.type
-    );
+  const category = getIncidentCategory(incident.type);
+  const categoryLabel = getIncidentCategoryLabel(incident.type);
 
-  const categoryLabel =
-    getIncidentCategoryLabel(
-      incident.type
-    );
+  const categoryColor = category?.color ?? '#C43D74';
+  const categoryBackground = category?.backgroundColor ?? '#FBEAF1';
+  const categoryIcon = category?.icon ?? 'alert-circle-outline';
 
-  const categoryColor =
-    category?.color ?? '#C43D74';
-
-  const categoryBackground =
-    category?.backgroundColor ??
-    '#FBEAF1';
-
-  const categoryIcon =
-    category?.icon ??
-    'alert-circle-outline';
-
-  const status =
-    getStatusDetails(
-      incident.status
-    );
+  const status = getStatusDetails(incident.status);
 
   const description =
     incident.description.trim() ||
@@ -147,94 +122,81 @@ export default function IncidentDetailsModal({
             contentContainerStyle={styles.content}
             showsVerticalScrollIndicator={false}
           >
+            {/* ---------- Header ---------- */}
             <View style={styles.header}>
               <View style={styles.headerText}>
-                <Text style={styles.smallTitle}>
-                  INCIDENT DETAILS
-                </Text>
+                <View style={styles.smallTitlePill}>
+                  <View style={styles.smallTitleDot} />
+                  <Text style={styles.smallTitle}>
+                    INCIDENT DETAILS
+                  </Text>
+                </View>
 
-                <Text style={styles.title}>
-                  {categoryLabel}
-                </Text>
+                <Text style={styles.title}>{categoryLabel}</Text>
               </View>
 
               <Pressable
                 style={({ pressed }) => [
                   styles.closeIconButton,
-                  pressed &&
-                    styles.buttonPressed,
+                  pressed && styles.buttonPressed,
                 ]}
                 onPress={onClose}
                 accessibilityRole="button"
                 accessibilityLabel="Close incident details"
               >
-                <Ionicons
-                  name="close"
-                  size={23}
-                  color="#32252B"
-                />
+                <Ionicons name="close" size={21} color="#32252B" />
               </Pressable>
             </View>
 
-            <View
-              style={[
-                styles.categoryIcon,
-                {
-                  backgroundColor:
-                    categoryBackground,
-                },
-              ]}
-            >
-              <Ionicons
-                name={categoryIcon}
-                size={34}
-                color={categoryColor}
-              />
-            </View>
-
-            <View
-              style={[
-                styles.statusBadge,
-                {
-                  backgroundColor:
-                    status.backgroundColor,
-                },
-              ]}
-            >
-              <Ionicons
-                name={status.icon}
-                size={17}
-                color={status.color}
-              />
-
-              <Text
+            {/* ---------- Category icon ---------- */}
+            <View style={styles.heroRow}>
+              <View
                 style={[
-                  styles.statusText,
-                  {
-                    color: status.color,
-                  },
+                  styles.categoryIcon,
+                  { backgroundColor: categoryBackground },
                 ]}
               >
-                {status.label} report
-              </Text>
+                <Ionicons
+                  name={categoryIcon}
+                  size={32}
+                  color={categoryColor}
+                />
+              </View>
+
+              <View
+                style={[
+                  styles.statusBadge,
+                  { backgroundColor: status.backgroundColor },
+                ]}
+              >
+                <Ionicons
+                  name={status.icon}
+                  size={15}
+                  color={status.color}
+                />
+
+                <Text
+                  style={[styles.statusText, { color: status.color }]}
+                >
+                  {status.label} report
+                </Text>
+              </View>
             </View>
 
-            <Text style={styles.sectionLabel}>
-              Description
-            </Text>
+            {/* ---------- Description ---------- */}
+            <Text style={styles.sectionLabel}>Description</Text>
 
-            <Text style={styles.description}>
-              {description}
-            </Text>
+            <View style={styles.descriptionCard}>
+              <Text style={styles.description}>{description}</Text>
+            </View>
 
             <View style={styles.divider} />
 
+            {/* ---------- Details ---------- */}
             <DetailRow
               icon="calendar-outline"
               label="REPORTED"
-              value={formatIncidentDate(
-                incident
-              )}
+              value={formatIncidentDate(incident)}
             />
 
             <DetailRow
@@ -260,19 +222,23 @@ export default function IncidentDetailsModal({
             <DetailRow
               icon="location-outline"
               label="LOCATION"
-              value={`${incident.coordinates.latitude.toFixed(
-                6
-              )}, ${incident.coordinates.longitude.toFixed(
-                6
-              )}`}
+              value={
+                incident.address ??
+                `${incident.coordinates.latitude.toFixed(
+                  6
+                )}, ${incident.coordinates.longitude.toFixed(6)}`
+              }
             />
 
+            {/* ---------- Privacy ---------- */}
             <View style={styles.privacyBox}>
-              <Ionicons
-                name="shield-checkmark-outline"
-                size={22}
-                color="#A92F61"
-              />
+              <View style={styles.privacyIconWrap}>
+                <Ionicons
+                  name="shield-checkmark-outline"
+                  size={20}
+                  color="#A92F61"
+                />
+              </View>
 
               <View style={styles.privacyTextArea}>
                 <Text style={styles.privacyTitle}>
@@ -286,19 +252,17 @@ export default function IncidentDetailsModal({
               </View>
             </View>
 
+            {/* ---------- Close ---------- */}
             <Pressable
               style={({ pressed }) => [
                 styles.closeButton,
-                pressed &&
-                  styles.buttonPressed,
+                pressed && styles.buttonPressed,
               ]}
               onPress={onClose}
               accessibilityRole="button"
               accessibilityLabel="Close incident details"
             >
-              <Text style={styles.closeButtonText}>
-                Close
-              </Text>
+              <Text style={styles.closeButtonText}>Close</Text>
             </Pressable>
           </ScrollView>
         </View>
@@ -313,29 +277,16 @@ type DetailRowProps = {
   value: string;
 };
 
-function DetailRow({
-  icon,
-  label,
-  value,
-}: DetailRowProps) {
+function DetailRow({ icon, label, value }: DetailRowProps) {
   return (
     <View style={styles.detailRow}>
       <View style={styles.detailIcon}>
-        <Ionicons
-          name={icon}
-          size={20}
-          color="#A92F61"
-        />
+        <Ionicons name={icon} size={19} color="#A92F61" />
       </View>
 
       <View style={styles.detailText}>
-        <Text style={styles.detailLabel}>
-          {label}
-        </Text>
-
-        <Text style={styles.detailValue}>
-          {value}
-        </Text>
+        <Text style={styles.detailLabel}>{label}</Text>
+        <Text style={styles.detailValue}>{value}</Text>
       </View>
     </View>
   );
@@ -345,8 +296,7 @@ const styles = StyleSheet.create({
   overlay: {
     flex: 1,
     justifyContent: 'flex-end',
-    backgroundColor:
-      'rgba(30, 20, 25, 0.48)',
+    backgroundColor: 'rgba(30, 20, 25, 0.48)',
   },
 
   dismissArea: {
@@ -375,6 +325,7 @@ const styles = StyleSheet.create({
     paddingBottom: 34,
   },
 
+  /* ---------- Header ---------- */
   header: {
     flexDirection: 'row',
     alignItems: 'flex-start',
@@ -386,18 +337,37 @@ const styles = StyleSheet.create({
     paddingRight: 12,
   },
 
+  smallTitlePill: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    alignSelf: 'flex-start',
+    paddingHorizontal: 9,
+    paddingVertical: 4,
+    borderRadius: 9,
+    backgroundColor: '#FBEAF1',
+  },
+
+  smallTitleDot: {
+    width: 6,
+    height: 6,
+    borderRadius: 3,
+    backgroundColor: '#A92F61',
+  },
+
   smallTitle: {
     color: '#A92F61',
-    fontSize: 11,
-    fontWeight: '800',
-    letterSpacing: 1.1,
+    fontSize: 10,
+    fontWeight: '900',
+    letterSpacing: 1,
   },
 
   title: {
-    marginTop: 4,
+    marginTop: 8,
     color: '#32252B',
-    fontSize: 25,
+    fontSize: 24,
     fontWeight: '900',
+    letterSpacing: -0.3,
   },
 
   closeIconButton: {
@@ -413,21 +383,31 @@ const styles = StyleSheet.create({
     opacity: 0.7,
   },
 
+  /* ---------- Hero ---------- */
+  heroRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+    marginTop: 22,
+  },
+
   categoryIcon: {
     width: 68,
     height: 68,
     alignItems: 'center',
     justifyContent: 'center',
-    marginTop: 22,
     borderRadius: 22,
+    shadowColor: '#4E1026',
+    shadowOffset: { width: 0, height: 3 },
+    shadowOpacity: 0.08,
+    shadowRadius: 8,
+    elevation: 2,
   },
 
   statusBadge: {
-    alignSelf: 'flex-start',
     flexDirection: 'row',
     alignItems: 'center',
     gap: 6,
-    marginTop: 14,
     paddingHorizontal: 11,
     paddingVertical: 7,
     borderRadius: 18,
@@ -436,28 +416,40 @@ const styles = StyleSheet.create({
   statusText: {
     fontSize: 12,
     fontWeight: '800',
+    letterSpacing: 0.1,
   },
 
+  /* ---------- Description ---------- */
   sectionLabel: {
     marginTop: 22,
     color: '#32252B',
-    fontSize: 14,
-    fontWeight: '800',
+    fontSize: 13.5,
+    fontWeight: '900',
+    letterSpacing: -0.1,
+  },
+
+  descriptionCard: {
+    marginTop: 8,
+    padding: 14,
+    borderRadius: 14,
+    backgroundColor: '#FBF5F7',
+    borderWidth: 1,
+    borderColor: '#F1DDE6',
   },
 
   description: {
-    marginTop: 7,
     color: '#5D4B53',
-    fontSize: 15,
-    lineHeight: 23,
+    fontSize: 14,
+    lineHeight: 22,
   },
 
   divider: {
     height: 1,
-    marginVertical: 20,
+    marginVertical: 22,
     backgroundColor: '#F1DDE6',
   },
 
+  /* ---------- Detail rows ---------- */
   detailRow: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -472,6 +464,8 @@ const styles = StyleSheet.create({
     marginRight: 12,
     borderRadius: 14,
     backgroundColor: '#FBEAF1',
+    borderWidth: 1,
+    borderColor: '#F1C8DA',
   },
 
   detailText: {
@@ -480,17 +474,20 @@ const styles = StyleSheet.create({
 
   detailLabel: {
     color: '#927E87',
-    fontSize: 11,
-    fontWeight: '700',
+    fontSize: 10,
+    fontWeight: '900',
+    letterSpacing: 0.8,
   },
 
   detailValue: {
-    marginTop: 3,
+    marginTop: 4,
     color: '#32252B',
     fontSize: 14,
-    fontWeight: '600',
+    fontWeight: '700',
+    lineHeight: 19,
   },
 
+  /* ---------- Privacy ---------- */
   privacyBox: {
     flexDirection: 'row',
     alignItems: 'flex-start',
@@ -503,6 +500,15 @@ const styles = StyleSheet.create({
     backgroundColor: '#FBEAF1',
   },
 
+  privacyIconWrap: {
+    width: 38,
+    height: 38,
+    borderRadius: 12,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: '#FFFFFF',
+  },
+
   privacyTextArea: {
     flex: 1,
   },
@@ -510,7 +516,7 @@ const styles = StyleSheet.create({
   privacyTitle: {
     color: '#742443',
     fontSize: 13,
-    fontWeight: '800',
+    fontWeight: '900',
   },
 
   privacyText: {
@@ -520,18 +526,25 @@ const styles = StyleSheet.create({
     lineHeight: 18,
   },
 
+  /* ---------- Close ---------- */
   closeButton: {
-    height: 52,
+    height: 54,
     alignItems: 'center',
     justifyContent: 'center',
-    marginTop: 23,
+    marginTop: 24,
     borderRadius: 16,
     backgroundColor: '#C43D74',
+    shadowColor: '#C43D74',
+    shadowOffset: { width: 0, height: 5 },
+    shadowOpacity: 0.28,
+    shadowRadius: 10,
+    elevation: 4,
   },
 
   closeButtonText: {
     color: '#FFFFFF',
     fontSize: 15,
     fontWeight: '800',
+    letterSpacing: 0.3,
   },
 });

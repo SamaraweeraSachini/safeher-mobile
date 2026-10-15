@@ -1,6 +1,9 @@
 import {
+  useFocusEffect,
+} from '@react-navigation/native';
+
+import {
   useCallback,
-  useEffect,
   useState,
 } from 'react';
 
@@ -17,14 +20,16 @@ export function useJourneyHistory() {
   const [
     journeys,
     setJourneys,
-  ] = useState<
-    StoredSafeJourney[]
-  >([]);
+  ] =
+    useState<
+      StoredSafeJourney[]
+    >([]);
 
   const [
     isLoading,
     setIsLoading,
-  ] = useState(true);
+  ] =
+    useState(true);
 
   const [
     error,
@@ -37,8 +42,13 @@ export function useJourneyHistory() {
   const loadHistory =
     useCallback(
       async () => {
-        setIsLoading(true);
-        setError(null);
+        setIsLoading(
+          true
+        );
+
+        setError(
+          null
+        );
 
         try {
           const history =
@@ -50,33 +60,39 @@ export function useJourneyHistory() {
         } catch (
           loadError
         ) {
-          if (
+          setError(
             loadError instanceof
-            SafeJourneyError
-          ) {
-            setError(
-              loadError.message
-            );
-          } else {
-            setError(
-              'Journey history could not be loaded.'
-            );
-          }
+              SafeJourneyError
+              ? loadError.message
+              : 'Journey history could not be loaded.'
+          );
         } finally {
-          setIsLoading(false);
+          setIsLoading(
+            false
+          );
         }
       },
       []
     );
 
-  useEffect(() => {
-    loadHistory();
-  }, [loadHistory]);
+  useFocusEffect(
+    useCallback(
+      () => {
+        void loadHistory();
+      },
+      [
+        loadHistory,
+      ]
+    )
+  );
 
   return {
     journeys,
+
     isLoading,
+
     error,
+
     retry:
       loadHistory,
   };

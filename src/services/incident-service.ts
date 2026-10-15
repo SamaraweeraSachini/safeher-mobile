@@ -5,7 +5,7 @@ import {
   query,
   serverTimestamp,
   Timestamp,
-  Unsubscribe,
+  type Unsubscribe,
   where,
 } from 'firebase/firestore';
 
@@ -25,9 +25,11 @@ import type {
   IncidentStatus,
 } from '@/src/types/incident';
 
-const ACTIVE_INCIDENT_LIMIT = 50;
+const ACTIVE_INCIDENT_LIMIT =
+  50;
 
-let submissionInProgress = false;
+let submissionInProgress =
+  false;
 
 export class IncidentSubmissionError extends Error {
   code:
@@ -37,81 +39,93 @@ export class IncidentSubmissionError extends Error {
     | 'firestore-error';
 
   constructor(
-    code: IncidentSubmissionError['code'],
-    message: string
-  ) {
-    super(message);
+    code:
+      IncidentSubmissionError['code'],
 
-    this.name = 'IncidentSubmissionError';
-    this.code = code;
+    message:
+      string
+  ) {
+    super(
+      message
+    );
+
+    this.name =
+      'IncidentSubmissionError';
+
+    this.code =
+      code;
   }
 }
 
 export class IncidentRetrievalError extends Error {
-  code: 'firestore-error';
+  code =
+    'firestore-error' as const;
 
-  constructor(message: string) {
-    super(message);
+  constructor(
+    message:
+      string
+  ) {
+    super(
+      message
+    );
 
-    this.name = 'IncidentRetrievalError';
-    this.code = 'firestore-error';
+    this.name =
+      'IncidentRetrievalError';
   }
 }
 
 function coordinatesAreValid(
-  latitude: number,
-  longitude: number
+  latitude:
+    number,
+
+  longitude:
+    number
 ): boolean {
   return (
-    Number.isFinite(latitude) &&
-    Number.isFinite(longitude) &&
-    latitude >= -90 &&
-    latitude <= 90 &&
-    longitude >= -180 &&
-    longitude <= 180
+    Number.isFinite(
+      latitude
+    ) &&
+    Number.isFinite(
+      longitude
+    ) &&
+    latitude >=
+      -90 &&
+    latitude <=
+      90 &&
+    longitude >=
+      -180 &&
+    longitude <=
+      180
   );
 }
 
-function validateCoordinates(
-  latitude: number,
-  longitude: number
-): void {
-  if (
-    !coordinatesAreValid(
-      latitude,
-      longitude
-    )
-  ) {
-    throw new IncidentSubmissionError(
-      'invalid-location',
-      'The selected incident location is invalid. Please select your current location again.'
-    );
-  }
-}
-
 function convertCoordinates(
-  value: unknown
+  value:
+    unknown
 ): IncidentCoordinates | null {
   if (
-    typeof value !== 'object' ||
-    value === null
+    typeof value !==
+      'object' ||
+    value ===
+      null
   ) {
     return null;
   }
 
-  const coordinates = value as {
-    latitude?: unknown;
-    longitude?: unknown;
-  };
+  const coordinates =
+    value as {
+      latitude?:
+        unknown;
+
+      longitude?:
+        unknown;
+    };
 
   if (
-    typeof coordinates.latitude !== 'number' ||
-    typeof coordinates.longitude !== 'number'
-  ) {
-    return null;
-  }
-
-  if (
+    typeof coordinates.latitude !==
+      'number' ||
+    typeof coordinates.longitude !==
+      'number' ||
     !coordinatesAreValid(
       coordinates.latitude,
       coordinates.longitude
@@ -130,8 +144,12 @@ function convertCoordinates(
 }
 
 function convertCreatedAt(
-  value: unknown
-): Timestamp | null | undefined {
+  value:
+    unknown
+):
+  | Timestamp
+  | null
+  | undefined {
   if (
     value === null ||
     value === undefined
@@ -139,57 +157,85 @@ function convertCreatedAt(
     return null;
   }
 
-  if (value instanceof Timestamp) {
-    return value;
-  }
-
-  return undefined;
+  return value instanceof
+    Timestamp
+    ? value
+    : undefined;
 }
 
-/**
- * Converts unknown Firestore data into the shared Incident model.
- * Invalid documents return null instead of crashing the application.
- */
-export function convertIncidentDocument(
-  id: string,
-  data: Record<string, unknown>
+function getAddress(
+  data:
+    Record<
+      string,
+      unknown
+    >
+): string | null {
+  return (
+    typeof data.address ===
+      'string' &&
+    data.address
+      .trim()
+      .length >
+      0
+      ? data.address.trim()
+      : null
+  );
+}
+
+const REPORT_STATUSES:
+  IncidentStatus[] = [
+    'active',
+    'under-review',
+    'resolved',
+    'removed',
+  ];
+
+function isReportStatus(
+  value:
+    unknown
+): value is IncidentStatus {
+  return (
+    typeof value ===
+      'string' &&
+    REPORT_STATUSES.includes(
+      value as IncidentStatus
+    )
+  );
+}
+
+function convertDocument(
+  id:
+    string,
+
+  data:
+    Record<
+      string,
+      unknown
+    >,
+
+  requireActive:
+    boolean
 ): Incident | null {
-  if (!id) {
-    console.warn(
-      'An incident document was ignored because its ID was missing.'
-    );
-
-    return null;
-  }
-
   if (
+    !id ||
     !isIncidentCategoryId(
       data.type
-    )
-  ) {
-    console.warn(
-      `Incident ${id} was ignored because its type is unsupported.`
-    );
-
-    return null;
-  }
-
-  if (data.status !== 'active') {
-    console.warn(
-      `Incident ${id} was ignored because it is not active.`
-    );
-
-    return null;
-  }
-
-  if (
+    ) ||
+    !isReportStatus(
+      data.status
+    ) ||
+    (
+      requireActive &&
+      data.status !==
+        'active'
+    ) ||
     typeof data.description !==
-    'string'
+      'string' ||
+    typeof data.anonymous !==
+      'boolean' ||
+    typeof data.creatorUid !==
+      'string'
   ) {
-    console.warn(
-      `Incident ${id} was ignored because its description is invalid.`
-    );
-
     return null;
   }
 
@@ -198,126 +244,104 @@ export function convertIncidentDocument(
       data.coordinates
     );
 
-  if (!coordinates) {
-    console.warn(
-      `Incident ${id} was ignored because its coordinates are invalid.`
-    );
-
-    return null;
-  }
-
-  if (
-    typeof data.anonymous !==
-    'boolean'
-  ) {
-    console.warn(
-      `Incident ${id} was ignored because its anonymous value is invalid.`
-    );
-
-    return null;
-  }
-
-  if (
-    typeof data.creatorUid !== 'string' ||
-    data.creatorUid.trim().length === 0
-  ) {
-    console.warn(
-      `Incident ${id} was ignored because its creator is invalid.`
-    );
-
-    return null;
-  }
-
   const createdAt =
     convertCreatedAt(
       data.createdAt
     );
 
-  if (createdAt === undefined) {
-    console.warn(
-      `Incident ${id} was ignored because its creation date is invalid.`
-    );
-
+  if (
+    !coordinates ||
+    createdAt ===
+      undefined
+  ) {
     return null;
   }
 
   return {
     id,
-    type: data.type,
+
+    type:
+      data.type,
+
     description:
       data.description.trim(),
+
     coordinates,
+
+    address:
+      getAddress(
+        data
+      ),
+
     anonymous:
       data.anonymous,
-    status: 'active',
+
+    status:
+      data.status,
+
     creatorUid:
       data.creatorUid,
+
     createdAt,
   };
 }
 
-function sortIncidentsByNewest(
-  firstIncident: Incident,
-  secondIncident: Incident
-): number {
-  const firstTime =
-    firstIncident.createdAt
-      ?.toMillis() ?? 0;
+export function convertIncidentDocument(
+  id:
+    string,
 
-  const secondTime =
-    secondIncident.createdAt
-      ?.toMillis() ?? 0;
-
-  return secondTime - firstTime;
-}
-
-/**
- * Removes duplicate incident objects using the Firestore document ID.
- * The newest version of a duplicated document is retained.
- */
-function removeDuplicateIncidents(
-  incidents: Incident[]
-): Incident[] {
-  const incidentsById =
-    new Map<string, Incident>();
-
-  incidents.forEach(incident => {
-    incidentsById.set(
-      incident.id,
-      incident
-    );
-  });
-
-  return Array.from(
-    incidentsById.values()
+  data:
+    Record<
+      string,
+      unknown
+    >
+): Incident | null {
+  return convertDocument(
+    id,
+    data,
+    true
   );
 }
 
-/**
- * Subscribes to active incidents through a Firestore real-time listener.
- *
- * Firestore sends a complete query snapshot whenever an active incident is
- * added, changed or removed. Returning the unsubscribe function allows the
- * React hook to clean up the listener when its screen unmounts.
- */
+function sortIncidentsByNewest(
+  first:
+    Incident,
+
+  second:
+    Incident
+): number {
+  return (
+    (
+      second.createdAt?.toMillis() ??
+      0
+    ) -
+    (
+      first.createdAt?.toMillis() ??
+      0
+    )
+  );
+}
+
 export function subscribeToActiveIncidents(
-  onIncidentsChanged: (
-    incidents: Incident[]
-  ) => void,
+  onIncidentsChanged:
+    (
+      incidents:
+        Incident[]
+    ) => void,
 
-  onError: (
-    error: IncidentRetrievalError
-  ) => void
+  onError:
+    (
+      error:
+        IncidentRetrievalError
+    ) => void
 ): Unsubscribe {
-  const incidentsReference =
-    collection(
-      firestore,
-      'incidents'
-    );
-
-  const activeIncidentsQuery =
+  const activeQuery =
     query(
-      incidentsReference,
+      collection(
+        firestore,
+        'incidents'
+      ),
+
       where(
         'status',
         '==',
@@ -325,141 +349,133 @@ export function subscribeToActiveIncidents(
       )
     );
 
-  const unsubscribe =
-    onSnapshot(
-      activeIncidentsQuery,
+  return onSnapshot(
+    activeQuery,
 
-      snapshot => {
-        const convertedIncidents =
-          snapshot.docs
-            .map(
-              documentSnapshot =>
-                convertIncidentDocument(
-                  documentSnapshot.id,
-                  documentSnapshot.data()
-                )
-            )
-            .filter(
-              (
-                incident
-              ): incident is Incident =>
-                incident !== null
+    snapshot => {
+      const incidentsById =
+        new Map<
+          string,
+          Incident
+        >();
+
+      snapshot.docs.forEach(
+        document => {
+          const incident =
+            convertIncidentDocument(
+              document.id,
+              document.data()
             );
 
-        const activeIncidents =
-          removeDuplicateIncidents(
-            convertedIncidents
-          )
-            .sort(
-              sortIncidentsByNewest
-            )
-            .slice(
-              0,
-              ACTIVE_INCIDENT_LIMIT
+          if (
+            incident
+          ) {
+            incidentsById.set(
+              incident.id,
+              incident
             );
+          }
+        }
+      );
 
-        onIncidentsChanged(
-          activeIncidents
-        );
-      },
-
-      error => {
-        console.error(
-          'Active incident real-time listener error:',
-          error
-        );
-
-        onError(
-          new IncidentRetrievalError(
-            'SafeHer lost its real-time incident connection. Check your internet connection and try again.'
+      const incidents =
+        Array.from(
+          incidentsById.values()
+        )
+          .sort(
+            sortIncidentsByNewest
           )
-        );
-      }
-    );
+          .slice(
+            0,
+            ACTIVE_INCIDENT_LIMIT
+          );
 
-  return unsubscribe;
-}
+      onIncidentsChanged(
+        incidents
+      );
+    },
 
-const REPORT_STATUSES: IncidentStatus[] = [
-  'active',
-  'under-review',
-  'resolved',
-  'removed',
-];
+    error => {
+      console.error(
+        'Active incident listener failed:',
+        error
+      );
 
-function isReportStatus(value: unknown): value is IncidentStatus {
-  return (
-    typeof value === 'string' &&
-    REPORT_STATUSES.includes(value as IncidentStatus)
+      onError(
+        new IncidentRetrievalError(
+          'SafeHer lost its real-time incident connection. Check your internet connection and try again.'
+        )
+      );
+    }
   );
 }
 
-function convertUserReportDocument(
-  id: string,
-  data: Record<string, unknown>
-): Incident | null {
-  if (
-    !id ||
-    !isIncidentCategoryId(data.type) ||
-    !isReportStatus(data.status) ||
-    typeof data.description !== 'string' ||
-    typeof data.anonymous !== 'boolean' ||
-    typeof data.creatorUid !== 'string' ||
-    data.creatorUid.trim().length === 0
-  ) {
-    return null;
-  }
-
-  const coordinates = convertCoordinates(data.coordinates);
-  const createdAt = convertCreatedAt(data.createdAt);
-
-  if (!coordinates || createdAt === undefined) {
-    return null;
-  }
-
-  return {
-    id,
-    type: data.type,
-    description: data.description.trim(),
-    coordinates,
-    anonymous: data.anonymous,
-    status: data.status,
-    creatorUid: data.creatorUid,
-    createdAt,
-  };
-}
-
-/**
- * Subscribes to incident reports created by one registered user.
- * Includes every report status, not only reports still shown on the map.
- */
 export function subscribeToUserReports(
-  userId: string,
-  onReportsChanged: (reports: Incident[]) => void,
-  onError: (error: IncidentRetrievalError) => void
+  userId:
+    string,
+
+  onReportsChanged:
+    (
+      reports:
+        Incident[]
+    ) => void,
+
+  onError:
+    (
+      error:
+        IncidentRetrievalError
+    ) => void
 ): Unsubscribe {
-  const reportsQuery = query(
-    collection(firestore, 'incidents'),
-    where('creatorUid', '==', userId)
-  );
+  const reportsQuery =
+    query(
+      collection(
+        firestore,
+        'incidents'
+      ),
+
+      where(
+        'creatorUid',
+        '==',
+        userId
+      )
+    );
 
   return onSnapshot(
     reportsQuery,
-    (snapshot) => {
-      const reports = snapshot.docs
-        .map((documentSnapshot) =>
-          convertUserReportDocument(
-            documentSnapshot.id,
-            documentSnapshot.data()
-          )
-        )
-        .filter((report): report is Incident => report !== null)
-        .sort(sortIncidentsByNewest);
 
-      onReportsChanged(reports);
+    snapshot => {
+      const reports =
+        snapshot.docs
+          .map(
+            document =>
+              convertDocument(
+                document.id,
+                document.data(),
+                false
+              )
+          )
+          .filter(
+            (
+              report
+            ): report is Incident =>
+              report !==
+              null
+          )
+          .sort(
+            sortIncidentsByNewest
+          );
+
+      onReportsChanged(
+        reports
+      );
     },
-    (error) => {
-      console.error('User report listener error:', error);
+
+    error => {
+      console.error(
+        'User report listener failed:',
+        error
+      );
+
       onError(
         new IncidentRetrievalError(
           'Your reports could not be loaded. Check your connection and try again.'
@@ -470,11 +486,15 @@ export function subscribeToUserReports(
 }
 
 export async function createIncidentReport(
-  input: CreateIncidentInput
+  input:
+    CreateIncidentInput
 ): Promise<string> {
-  if (submissionInProgress) {
+  if (
+    submissionInProgress
+  ) {
     throw new IncidentSubmissionError(
       'duplicate-submission',
+
       'This incident report is already being submitted.'
     );
   }
@@ -482,27 +502,43 @@ export async function createIncidentReport(
   const currentUser =
     firebaseAuth.currentUser;
 
-  if (!currentUser) {
+  if (
+    !currentUser
+  ) {
     throw new IncidentSubmissionError(
       'not-authenticated',
+
       'You must be logged in or continue as a guest before submitting an incident report.'
     );
   }
 
-  validateCoordinates(
-    input.coordinates.latitude,
-    input.coordinates.longitude
-  );
+  if (
+    !coordinatesAreValid(
+      input.coordinates
+        .latitude,
 
-  submissionInProgress = true;
+      input.coordinates
+        .longitude
+    )
+  ) {
+    throw new IncidentSubmissionError(
+      'invalid-location',
+
+      'The selected incident location is invalid.'
+    );
+  }
+
+  submissionInProgress =
+    true;
 
   try {
-    const incidentReference =
+    const document =
       await addDoc(
         collection(
           firestore,
           'incidents'
         ),
+
         {
           type:
             input.type,
@@ -520,6 +556,10 @@ export async function createIncidentReport(
                 .longitude,
           },
 
+          address:
+            input.address?.trim() ||
+            null,
+
           anonymous:
             input.anonymous,
 
@@ -534,25 +574,22 @@ export async function createIncidentReport(
         }
       );
 
-    return incidentReference.id;
-  } catch (error) {
-    if (
-      error instanceof
-      IncidentSubmissionError
-    ) {
-      throw error;
-    }
-
+    return document.id;
+  } catch (
+    error
+  ) {
     console.error(
-      'Firestore incident submission error:',
+      'Incident submission error:',
       error
     );
 
     throw new IncidentSubmissionError(
       'firestore-error',
+
       'SafeHer could not submit your incident report. Check your internet connection and try again.'
     );
   } finally {
-    submissionInProgress = false;
+    submissionInProgress =
+      false;
   }
 }

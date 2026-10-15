@@ -1,4 +1,6 @@
-import type { Timestamp } from 'firebase/firestore';
+import type {
+  Timestamp,
+} from 'firebase/firestore';
 
 export type IncidentCategoryId =
   | 'harassment'
@@ -22,26 +24,63 @@ export interface IncidentCoordinates {
 
 export interface Incident {
   id: string;
-  type: IncidentCategoryId;
-  description: string;
-  coordinates: IncidentCoordinates;
-  anonymous: boolean;
-  status: IncidentStatus;
-  creatorUid: string;
-  createdAt: Timestamp | null;
+
+  type:
+    IncidentCategoryId;
+
+  description:
+    string;
+
+  coordinates:
+    IncidentCoordinates;
+
+  /**
+   * Human-readable location when reverse geocoding succeeded.
+   * Coordinates are still kept because maps and route scoring need them.
+   */
+  address?:
+    string | null;
+
+  anonymous:
+    boolean;
+
+  status:
+    IncidentStatus;
+
+  creatorUid:
+    string;
+
+  createdAt:
+    Timestamp | null;
 }
 
 export interface CreateIncidentInput {
-  type: IncidentCategoryId;
-  description: string;
-  coordinates: IncidentCoordinates;
-  anonymous: boolean;
+  type:
+    IncidentCategoryId;
+
+  description:
+    string;
+
+  coordinates:
+    IncidentCoordinates;
+
+  address?:
+    string | null;
+
+  anonymous:
+    boolean;
 }
 
 export interface IncidentCategory {
-  id: IncidentCategoryId;
-  label: string;
-  description: string;
+  id:
+    IncidentCategoryId;
+
+  label:
+    string;
+
+  description:
+    string;
+
   icon:
     | 'hand-left-outline'
     | 'eye-outline'
@@ -50,6 +89,10 @@ export interface IncidentCategory {
     | 'alert-circle-outline'
     | 'search-outline'
     | 'ellipsis-horizontal-circle-outline';
-  color: string;
-  backgroundColor: string;
+
+  color:
+    string;
+
+  backgroundColor:
+    string;
 }

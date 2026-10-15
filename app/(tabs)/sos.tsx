@@ -1,319 +1,488 @@
 import { Ionicons } from '@expo/vector-icons';
-import { useRouter } from 'expo-router';
+
 import * as Location from 'expo-location';
-import { collection, getDocs } from 'firebase/firestore';
-import { useCallback, useEffect, useState } from 'react';
+
+import {
+  type Href,
+  useRouter,
+} from 'expo-router';
+
+import {
+  useEffect,
+  useState,
+} from 'react';
+
 import {
   ActivityIndicator,
   Alert,
+  Linking,
   Pressable,
   ScrollView,
+  Share,
   StyleSheet,
   Text,
   View,
 } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
 
-import { firestore } from '@/src/config/firebase';
-import { useAuth } from '@/src/context/AuthContext';
+import {
+  SafeAreaView,
+} from 'react-native-safe-area-context';
 
-type ContactPreview = {
-  id: string;
-  name: string;
-  relationship: string;
+import {
+  Brand,
+} from '@/constants/brand';
+
+import ScreenBackButton from '@/src/components/navigation/ScreenBackButton';
+
+import {
+  reverseGeocodeLocation,
+} from '@/src/services/location-address-service';
+
+import {
+  createSosEvent,
+  finishSosEvent,
+} from '@/src/services/sos-service';
+
+import {
+  subscribeToTrustedContacts,
+} from '@/src/services/trusted-contact-service';
+
+import type {
+  TrustedContact,
+} from '@/src/types/trusted-contact';
+
+type SosState =
+  | 'ready'
+  | 'active'
+  | 'resolved'
+  | 'cancelled';
+
+type EmergencyLocation = {
+  latitude: number;
+  longitude: number;
+  address: string | null;
 };
-
-type LocationStatus =
-  | 'checking'
-  | 'available'
-  | 'permission-needed'
-  | 'unavailable';
 
 export default function SosScreen() {
   const router = useRouter();
-  const { user, loading: authLoading } = useAuth();
 
-  const [locationStatus, setLocationStatus] =
-    useState<LocationStatus>('checking');
-  const [contacts, setContacts] = useState<ContactPreview[]>([]);
-  const [contactsLoading, setContactsLoading] = useState(false);
-  const [contactsError, setContactsError] =
-    useState<string | null>(null);
-  const [refresh, setRefresh] = useState(0);
+  const [state, setState] = useState<SosState>('ready');
+  const [eventId, setEventId] = useState<string | null>(null);
+  const [contacts, setContacts] = useState<TrustedContact[]>([]);
+  const [location, setLocation] = useState<EmergencyLocation | null>(null);
 
-  const checkLocation = useCallback(async () => {
-    setLocationStatus('checking');
+  const [locationStatus, setLocationStatus] = useState<
+    'idle' | 'loading' | 'available' | 'unavailable'
+  >('idle');
 
+  useEffect(() => {
     try {
-      const enabled = await Location.hasServicesEnabledAsync();
+      const unsubscribe = subscribeToTrustedContacts(
+        setContacts,
+        () => setContacts([])
+      );
+      return unsubscribe;
+    } catch {
+      setContacts([]);
+    }
+  }, []);
 
-      if (!enabled) {
+  const retrieveLocation = async () => {
+    try {
+      setLocationStatus('loading');
+
+      let permission = await Location.getForegroundPermissionsAsync();
+
+      if (permission.status !== 'granted') {
+        permission = await Location.requestForegroundPermissionsAsync();
+      }
+
+      if (permission.status !== 'granted') {
         setLocationStatus('unavailable');
         return;
       }
 
-      const permission =
-        await Location.getForegroundPermissionsAsync();
+      const position = await Location.getCurrentPositionAsync({
+        accuracy: Location.Accuracy.Balanced,
+      });
 
-      setLocationStatus(
-        permission.granted
-          ? 'available'
-          : 'permission-needed'
-      );
-    } catch {
+      const coordinate = {
+        latitude: position.coords.latitude,
+        longitude: position.coords.longitude,
+      };
+
+      const address = await reverseGeocodeLocation(coordinate);
+
+      setLocation({ ...coordinate, address });
+      setLocationStatus('available');
+    } catch (error) {
+      console.warn('SOS location failed:', error);
       setLocationStatus('unavailable');
     }
-  }, []);
+  };
 
-  useEffect(() => {
-    void checkLocation();
-  }, [checkLocation]);
-
-  useEffect(() => {
-    if (!user || user.isAnonymous) {
-      setContacts([]);
-      setContactsError(null);
-      setContactsLoading(false);
+  const activate = async () => {
+    if (state === 'active') {
       return;
     }
 
-    let active = true;
+    setState('active');
+    void retrieveLocation();
 
-    setContactsLoading(true);
-    setContactsError(null);
+    try {
+      const id = await createSosEvent();
+      setEventId(id);
+    } catch (error) {
+      console.warn('SOS event could not be stored:', error);
+    }
+  };
 
-    getDocs(
-      collection(
-        firestore,
-        'users',
-        user.uid,
-        'trustedContacts'
-      )
-    )
-      .then((snapshot) => {
-        if (!active) return;
+  const shareEmergency = async () => {
+    const locationLine = location
+      ? `Location: ${
+          location.address ?? 'Current GPS position'
+        }\nhttps://www.google.com/maps?q=${location.latitude},${location.longitude}`
+      : 'Location is not available yet.';
 
-        const items = snapshot.docs.map((document) => {
-          const data = document.data();
+    const contactLine =
+      contacts.length > 0
+        ? `Saved emergency contacts: ${contacts
+            .map(contact => contact.name)
+            .join(', ')}`
+        : 'No saved emergency contacts are available.';
 
-          return {
-            id: document.id,
-            name:
-              typeof data.name === 'string'
-                ? data.name.trim()
-                : '',
-            relationship:
-              typeof data.relationship === 'string'
-                ? data.relationship.trim()
-                : '',
-          };
-        });
-
-        setContacts(
-          items.filter((item) => item.name.length > 0)
-        );
-      })
-      .catch(() => {
-        if (active) {
-          setContacts([]);
-          setContactsError(
-            'Could not load trusted contacts. Check your connection and try again.'
-          );
-        }
-      })
-      .finally(() => {
-        if (active) setContactsLoading(false);
+    try {
+      await Share.share({
+        title: 'SafeHer Emergency Message',
+        message: `I need help. This message was prepared by the SafeHer academic prototype.\n\n${locationLine}\n\n${contactLine}\n\nPlease contact me and, if needed, emergency services.`,
       });
+    } catch (error) {
+      console.error('Emergency share failed:', error);
+      Alert.alert('Could not open sharing', 'Please try again.');
+    }
+  };
 
-    return () => {
-      active = false;
-    };
-  }, [user, refresh]);
+  const callNumber = async (number: string) => {
+    try {
+      await Linking.openURL(`tel:${number}`);
+    } catch {
+      Alert.alert(
+        'Dialler unavailable',
+        `Please call ${number} manually.`
+      );
+    }
+  };
 
-  const locationMessages: Record<
-    LocationStatus,
-    string
-  > = {
-    checking: 'Checking location availability...',
-    available:
-      'Location permission is available. Your position will be checked when SOS is activated.',
-    'permission-needed':
-      'Location permission is needed to include your position. You can still call for help without it.',
-    unavailable:
-      'Location is unavailable right now. You can still call for help without it.',
+  const finish = async (result: 'resolved' | 'cancelled') => {
+    setState(result);
+
+    if (eventId) {
+      try {
+        await finishSosEvent(eventId, result);
+      } catch (error) {
+        console.warn('SOS status could not be stored:', error);
+      }
+    }
   };
 
   return (
-    <SafeAreaView
-      style={styles.safeArea}
-      edges={['top']}
-    >
+    <SafeAreaView style={styles.safeArea} edges={['top']}>
       <ScrollView
         contentContainerStyle={styles.content}
+        showsVerticalScrollIndicator={false}
       >
-        <Pressable
-          style={styles.back}
-          onPress={() => router.back()}
-          accessibilityRole="button"
-          accessibilityLabel="Go back"
-        >
-          <Ionicons
-            name="arrow-back"
-            size={22}
-            color="#5A3D4D"
-          />
-          <Text style={styles.backText}>
-            Back
-          </Text>
-        </Pressable>
+        <ScreenBackButton label="Home" />
 
-        <Text style={styles.title}>
-          SOS assistance
-        </Text>
+        {/* ---------- Header ---------- */}
+        <View style={styles.header}>
+          <View style={{ flex: 1 }}>
+            <Text style={styles.title}>SOS Assistance</Text>
+            <View style={styles.prototypePill}>
+              <View style={styles.prototypeDot} />
+              <Text style={styles.prototypeText}>
+                Academic prototype
+              </Text>
+            </View>
+          </View>
 
-        <Text style={styles.intro}>
-          Prepare an emergency-support request. If you
-          are in immediate danger, contact emergency
-          services directly.
-        </Text>
-
-        <View style={styles.hero}>
-          <Pressable
-            style={({ pressed }) => [
-              styles.sosButton,
-              pressed && styles.pressed,
-            ]}
-            onPress={() =>
-              Alert.alert(
-                'SOS activation',
-                'The hold and confirmation countdown will be added in the next SOS task. No request has been sent.'
-              )
-            }
-            accessibilityRole="button"
-            accessibilityLabel="SOS activation information"
-          >
-            <Ionicons
-              name="alert-circle"
-              size={42}
-              color="#FFFFFF"
-            />
-
-            <Text style={styles.sosText}>
-              SOS
-            </Text>
-          </Pressable>
-
-          <Text style={styles.instruction}>
-            Press and hold for three seconds, then confirm
-            to activate a prototype SOS request.
-          </Text>
-
-          <Text style={styles.pending}>
-            Activation becomes available after the
-            confirmation countdown is added.
-          </Text>
+          <View style={styles.headerIconWrap}>
+            <Ionicons name="alert-circle" size={28} color="#C83B4D" />
+          </View>
         </View>
 
+        {/* ---------- Ready / State ---------- */}
+        {state === 'ready' ? (
+          <View style={styles.hero}>
+            <View style={styles.sosRingOuter}>
+              <Pressable
+                style={({ pressed }) => [
+                  styles.sosButton,
+                  pressed && styles.sosPressed,
+                ]}
+                onLongPress={activate}
+                delayLongPress={1200}
+                accessibilityRole="button"
+                accessibilityLabel="Press and hold to activate SOS"
+              >
+                <Ionicons
+                  name="alert-circle"
+                  size={46}
+                  color="#FFFFFF"
+                />
+                <Text style={styles.sosText}>HOLD SOS</Text>
+              </Pressable>
+            </View>
+
+            <Text style={styles.instruction}>
+              Press and hold once to activate. Emergency-call buttons
+              remain available even before GPS is ready.
+            </Text>
+          </View>
+        ) : (
+          <View
+            style={[
+              styles.stateCard,
+              state === 'active' && styles.activeState,
+            ]}
+          >
+            <View
+              style={[
+                styles.stateIconWrap,
+                state === 'active'
+                  ? styles.stateIconActive
+                  : styles.stateIconIdle,
+              ]}
+            >
+              <Ionicons
+                name={
+                  state === 'active'
+                    ? 'radio-outline'
+                    : 'checkmark-circle-outline'
+                }
+                size={22}
+                color={state === 'active' ? '#B42318' : '#287550'}
+              />
+            </View>
+
+            <View style={{ flex: 1 }}>
+              <Text style={styles.stateTitle}>
+                {state === 'active'
+                  ? 'SOS active'
+                  : state === 'resolved'
+                    ? 'SOS resolved'
+                    : 'SOS cancelled'}
+              </Text>
+
+              <Text style={styles.stateText}>
+                {state === 'active'
+                  ? 'Use the actions below. Location is loading separately.'
+                  : 'No prototype SOS action is active now.'}
+              </Text>
+            </View>
+          </View>
+        )}
+
+        {/* ---------- Emergency Calls ---------- */}
         <View style={styles.card}>
-          <Text style={styles.cardTitle}>
-            Current location
-          </Text>
+          <View style={styles.cardHeaderRow}>
+            <View style={styles.cardIconWrap}>
+              <Ionicons name="call-outline" size={17} color={Brand.burgundy} />
+            </View>
+            <Text style={styles.cardTitle}>Emergency calls</Text>
+          </View>
 
           <Text style={styles.body}>
-            {locationMessages[locationStatus]}
+            These buttons open the phone dialler. SafeHer does not place
+            the call automatically.
           </Text>
 
-          {locationStatus === 'checking' && (
-            <ActivityIndicator
-              color="#C43D74"
-            />
-          )}
+          <Pressable
+            style={({ pressed }) => [
+              styles.policeButton,
+              pressed && styles.pressed,
+            ]}
+            onPress={() => void callNumber('119')}
+          >
+            <Ionicons name="call" size={20} color="#FFFFFF" />
+            <Text style={styles.callText}>Police Emergency · 119</Text>
+          </Pressable>
 
           <Pressable
-            style={styles.action}
-            onPress={() => void checkLocation()}
-            accessibilityRole="button"
-            accessibilityLabel="Check location availability again"
+            style={({ pressed }) => [
+              styles.ambulanceButton,
+              pressed && styles.pressed,
+            ]}
+            onPress={() => void callNumber('1990')}
           >
-            <Text style={styles.actionText}>
-              Check availability
-            </Text>
+            <Ionicons name="medkit" size={20} color="#FFFFFF" />
+            <Text style={styles.callText}>Ambulance · 1990</Text>
           </Pressable>
         </View>
 
+        {/* ---------- Location ---------- */}
         <View style={styles.card}>
-          <Text style={styles.cardTitle}>
-            Trusted contacts
-          </Text>
+          <View style={styles.cardHeaderRow}>
+            <View style={styles.cardIconWrap}>
+              <Ionicons
+                name="location-outline"
+                size={17}
+                color={Brand.burgundy}
+              />
+            </View>
+            <Text style={styles.cardTitle}>Location</Text>
+          </View>
 
-          {authLoading || contactsLoading ? (
-            <ActivityIndicator
-              color="#C43D74"
-            />
-          ) : contactsError ? (
+          {locationStatus === 'loading' ? (
+            <View style={styles.row}>
+              <ActivityIndicator color={Brand.burgundy} />
+              <Text style={styles.body}>Getting current location...</Text>
+            </View>
+          ) : location ? (
             <>
-              <Text style={styles.body}>
-                {contactsError}
+              <Text style={styles.locationAddress}>
+                {location.address ?? 'Current GPS location'}
               </Text>
-
-              <Pressable
-                style={styles.action}
-                onPress={() =>
-                  setRefresh((n) => n + 1)
-                }
-                accessibilityRole="button"
-                accessibilityLabel="Retry loading trusted contacts"
-              >
-                <Text style={styles.actionText}>
-                  Try again
-                </Text>
-              </Pressable>
+              <Text style={styles.body}>
+                {location.latitude.toFixed(5)},{' '}
+                {location.longitude.toFixed(5)}
+              </Text>
             </>
-          ) : !user || user.isAnonymous ? (
+          ) : (
             <Text style={styles.body}>
-              Sign in with a registered account to see
-              saved contacts.
+              {locationStatus === 'unavailable'
+                ? 'Location is unavailable. You can still call or share an emergency message.'
+                : 'Location will be requested after SOS activation.'}
             </Text>
-          ) : contacts.length === 0 ? (
+          )}
+        </View>
+
+        {/* ---------- Trusted Contacts ---------- */}
+        <View style={styles.card}>
+          <View style={styles.cardHeaderRow}>
+            <View style={styles.cardIconWrap}>
+              <Ionicons
+                name="people-outline"
+                size={17}
+                color={Brand.burgundy}
+              />
+            </View>
+            <Text style={styles.cardTitle}>Trusted contacts</Text>
+
+            <Pressable
+              style={({ pressed }) => [
+                styles.changeButton,
+                pressed && styles.pressed,
+              ]}
+              onPress={() => router.push('/trusted-contacts' as Href)}
+            >
+              <Text style={styles.changeText}>Change</Text>
+            </Pressable>
+          </View>
+
+          {contacts.length === 0 ? (
             <Text style={styles.body}>
-              No trusted contacts have been added. You
-              can still access emergency services.
+              No saved trusted contacts. Add them once and they will be
+              ready here.
             </Text>
           ) : (
-            contacts.map((contact) => (
-              <Text
+            contacts.map(contact => (
+              <Pressable
                 key={contact.id}
-                style={styles.contact}
+                style={({ pressed }) => [
+                  styles.contactRow,
+                  pressed && styles.pressed,
+                ]}
+                onPress={() => void callNumber(contact.phone)}
               >
-                {contact.name}
-                {contact.relationship
-                  ? ` · ${contact.relationship}`
-                  : ''}
-              </Text>
+                <View style={styles.contactAvatar}>
+                  <Ionicons
+                    name="person"
+                    size={16}
+                    color={Brand.burgundy}
+                  />
+                </View>
+
+                <View style={{ flex: 1 }}>
+                  <Text style={styles.contactName}>{contact.name}</Text>
+                  <Text style={styles.contactMeta}>
+                    {contact.relationship || 'Trusted contact'}
+                    {' · '}
+                    {contact.phone}
+                  </Text>
+                </View>
+
+                <View style={styles.callCircle}>
+                  <Ionicons name="call" size={16} color={Brand.burgundy} />
+                </View>
+              </Pressable>
             ))
           )}
         </View>
 
-        <View style={styles.card}>
-          <Text style={styles.cardTitle}>
-            Emergency services
-          </Text>
+        {/* ---------- Share Emergency ---------- */}
+        <Pressable
+          style={({ pressed }) => [
+            styles.shareButton,
+            pressed && styles.pressed,
+          ]}
+          onPress={() => void shareEmergency()}
+        >
+          <Ionicons
+            name="share-social-outline"
+            size={20}
+            color="#FFFFFF"
+          />
+          <Text style={styles.shareText}>Share Emergency Message</Text>
+        </Pressable>
 
-          <Text style={styles.body}>
-            Emergency-service quick-call actions will
-            appear here when verified numbers are added.
-            If you need immediate assistance, use your
-            phone dialer now.
-          </Text>
-        </View>
+        {/* ---------- Cancel / Resolve ---------- */}
+        {state === 'active' ? (
+          <View style={styles.actionRow}>
+            <Pressable
+              style={({ pressed }) => [
+                styles.cancelButton,
+                pressed && styles.pressed,
+              ]}
+              onPress={() => void finish('cancelled')}
+            >
+              <Ionicons
+                name="close-circle-outline"
+                size={17}
+                color="#B42318"
+              />
+              <Text style={styles.cancelText}>Cancel SOS</Text>
+            </Pressable>
 
+            <Pressable
+              style={({ pressed }) => [
+                styles.resolveButton,
+                pressed && styles.pressed,
+              ]}
+              onPress={() => void finish('resolved')}
+            >
+              <Ionicons
+                name="checkmark-circle-outline"
+                size={17}
+                color="#FFFFFF"
+              />
+              <Text style={styles.resolveText}>Resolve</Text>
+            </Pressable>
+          </View>
+        ) : null}
+
+        {/* ---------- Disclaimer ---------- */}
         <View style={styles.disclaimer}>
+          <View style={styles.disclaimerIconWrap}>
+            <Ionicons
+              name="information-circle-outline"
+              size={18}
+              color="#74552C"
+            />
+          </View>
+
           <Text style={styles.disclaimerText}>
-            SafeHer SOS is an academic prototype. Opening
-            this screen does not send an alert, contact
-            trusted people, or notify emergency services.
-            Do not rely on SafeHer as your only way to get
-            help.
+            SafeHer is an academic prototype. It cannot verify message
+            delivery, emergency dispatch, or that help is on the way.
           </Text>
         </View>
       </ScrollView>
@@ -324,129 +493,419 @@ export default function SosScreen() {
 const styles = StyleSheet.create({
   safeArea: {
     flex: 1,
-    backgroundColor: '#FFF8FB',
+    backgroundColor: Brand.cream,
   },
 
   content: {
     paddingHorizontal: 20,
-    paddingBottom: 36,
+    paddingTop: 12,
+    paddingBottom: 44,
   },
 
-  back: {
+  /* ---------- Header ---------- */
+  header: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 7,
-    minHeight: 44,
+    gap: 12,
   },
 
-  backText: {
-    color: '#5A3D4D',
-    fontSize: 15,
-    fontWeight: '700',
+  headerIconWrap: {
+    width: 50,
+    height: 50,
+    borderRadius: 16,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: '#FDECEC',
+    borderWidth: 1,
+    borderColor: '#F8CFCB',
   },
 
   title: {
-    marginTop: 8,
-    color: '#32252B',
-    fontSize: 28,
+    color: Brand.ink,
+    fontSize: 26,
     fontWeight: '900',
+    letterSpacing: -0.4,
   },
 
-  intro: {
-    marginTop: 8,
-    color: '#5D4B53',
-    fontSize: 14,
-    lineHeight: 21,
+  prototypePill: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 5,
+    alignSelf: 'flex-start',
+    marginTop: 6,
+    paddingHorizontal: 9,
+    paddingVertical: 3,
+    borderRadius: 9,
+    backgroundColor: '#FDECEC',
   },
 
+  prototypeDot: {
+    width: 6,
+    height: 6,
+    borderRadius: 3,
+    backgroundColor: '#B42318',
+  },
+
+  prototypeText: {
+    color: '#B42318',
+    fontSize: 11,
+    fontWeight: '900',
+    letterSpacing: 0.2,
+  },
+
+  /* ---------- Hero / SOS ---------- */
   hero: {
     alignItems: 'center',
     paddingVertical: 26,
   },
 
+  sosRingOuter: {
+    padding: 14,
+    borderRadius: 110,
+    backgroundColor: 'rgba(200, 59, 77, 0.12)',
+  },
+
   sosButton: {
-    width: 172,
-    height: 172,
-    borderRadius: 86,
+    width: 176,
+    height: 176,
+    borderRadius: 88,
     backgroundColor: '#C83B4D',
     alignItems: 'center',
     justifyContent: 'center',
-    elevation: 6,
+    shadowColor: '#C83B4D',
+    shadowOffset: { width: 0, height: 8 },
+    shadowOpacity: 0.4,
+    shadowRadius: 16,
+    elevation: 8,
+    borderWidth: 4,
+    borderColor: 'rgba(255, 255, 255, 0.35)',
+  },
+
+  sosPressed: {
+    transform: [{ scale: 0.96 }],
   },
 
   sosText: {
+    marginTop: 6,
     color: '#FFFFFF',
-    fontSize: 37,
+    fontSize: 22,
     fontWeight: '900',
-  },
-
-  pressed: {
-    opacity: 0.8,
+    letterSpacing: 1,
   },
 
   instruction: {
     marginTop: 18,
-    color: '#32252B',
-    fontSize: 15,
+    maxWidth: 310,
+    color: Brand.ink,
+    textAlign: 'center',
+    lineHeight: 20,
     fontWeight: '700',
-    lineHeight: 22,
-    textAlign: 'center',
+    fontSize: 13,
   },
 
-  pending: {
-    marginTop: 8,
-    color: '#725F68',
+  /* ---------- State ---------- */
+  stateCard: {
+    flexDirection: 'row',
+    gap: 12,
+    marginVertical: 18,
+    padding: 15,
+    borderRadius: 18,
+    backgroundColor: Brand.white,
+    borderWidth: 1,
+    borderColor: Brand.line,
+  },
+
+  activeState: {
+    borderColor: '#FDA29B',
+    backgroundColor: '#FEF3F2',
+    shadowColor: '#B42318',
+    shadowOffset: { width: 0, height: 3 },
+    shadowOpacity: 0.12,
+    shadowRadius: 8,
+    elevation: 2,
+  },
+
+  stateIconWrap: {
+    width: 40,
+    height: 40,
+    borderRadius: 13,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+
+  stateIconActive: {
+    backgroundColor: '#FDECEC',
+  },
+
+  stateIconIdle: {
+    backgroundColor: '#E8F5ED',
+  },
+
+  stateTitle: {
+    color: Brand.ink,
+    fontWeight: '900',
+    fontSize: 14,
+  },
+
+  stateText: {
+    marginTop: 3,
+    color: Brand.muted,
     fontSize: 12,
-    textAlign: 'center',
+    lineHeight: 17,
   },
 
+  /* ---------- Cards ---------- */
   card: {
     marginBottom: 14,
     padding: 16,
-    borderRadius: 16,
-    backgroundColor: '#FFFFFF',
+    borderRadius: 18,
+    backgroundColor: Brand.white,
+    borderWidth: 1,
+    borderColor: Brand.line,
+    shadowColor: '#4E1026',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.04,
+    shadowRadius: 6,
+    elevation: 1,
+  },
+
+  cardHeaderRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 9,
+    marginBottom: 8,
+  },
+
+  cardIconWrap: {
+    width: 30,
+    height: 30,
+    borderRadius: 10,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: Brand.blush,
   },
 
   cardTitle: {
-    marginBottom: 8,
-    color: '#32252B',
-    fontSize: 17,
+    flex: 1,
+    color: Brand.ink,
+    fontSize: 15.5,
     fontWeight: '800',
   },
 
   body: {
-    color: '#5D4B53',
-    fontSize: 14,
-    lineHeight: 20,
+    color: Brand.muted,
+    fontSize: 12.5,
+    lineHeight: 18,
   },
 
-  contact: {
-    color: '#32252B',
-    fontSize: 14,
-    paddingVertical: 7,
+  row: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
   },
 
-  action: {
-    alignSelf: 'flex-start',
-    marginTop: 12,
-    paddingVertical: 8,
-  },
-
-  actionText: {
-    color: '#A92F61',
-    fontSize: 14,
-    fontWeight: '700',
-  },
-
-  disclaimer: {
-    padding: 16,
+  /* ---------- Emergency call buttons ---------- */
+  policeButton: {
+    minHeight: 54,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+    marginTop: 14,
     borderRadius: 14,
+    backgroundColor: '#9B2D3F',
+    shadowColor: '#9B2D3F',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.25,
+    shadowRadius: 8,
+    elevation: 3,
+  },
+
+  ambulanceButton: {
+    minHeight: 54,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+    marginTop: 9,
+    borderRadius: 14,
+    backgroundColor: '#287550',
+    shadowColor: '#287550',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.25,
+    shadowRadius: 8,
+    elevation: 3,
+  },
+
+  callText: {
+    color: '#FFFFFF',
+    fontWeight: '900',
+    fontSize: 14.5,
+    letterSpacing: 0.1,
+  },
+
+  /* ---------- Location ---------- */
+  locationAddress: {
+    color: Brand.ink,
+    fontWeight: '800',
+    lineHeight: 19,
+    marginBottom: 4,
+    fontSize: 13.5,
+  },
+
+  /* ---------- Contacts ---------- */
+  changeButton: {
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+    borderRadius: 9,
+    backgroundColor: Brand.blush,
+  },
+
+  changeText: {
+    color: Brand.burgundy,
+    fontWeight: '900',
+    fontSize: 12,
+  },
+
+  contactRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+    paddingVertical: 10,
+    borderBottomWidth: 1,
+    borderBottomColor: Brand.line,
+  },
+
+  contactAvatar: {
+    width: 38,
+    height: 38,
+    borderRadius: 19,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: Brand.blush,
+  },
+
+  contactName: {
+    color: Brand.ink,
+    fontWeight: '800',
+    fontSize: 13.5,
+  },
+
+  contactMeta: {
+    marginTop: 3,
+    color: Brand.muted,
+    fontSize: 11.5,
+  },
+
+  callCircle: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: Brand.blush,
+  },
+
+  /* ---------- Share ---------- */
+  shareButton: {
+    minHeight: 56,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+    borderRadius: 15,
+    backgroundColor: Brand.burgundy,
+    shadowColor: Brand.burgundy,
+    shadowOffset: { width: 0, height: 5 },
+    shadowOpacity: 0.28,
+    shadowRadius: 10,
+    elevation: 4,
+  },
+
+  shareText: {
+    color: '#FFFFFF',
+    fontWeight: '900',
+    fontSize: 15,
+    letterSpacing: 0.2,
+  },
+
+  /* ---------- Action Row ---------- */
+  actionRow: {
+    flexDirection: 'row',
+    gap: 10,
+    marginTop: 10,
+  },
+
+  cancelButton: {
+    flex: 1,
+    minHeight: 50,
+    flexDirection: 'row',
+    gap: 6,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 1.5,
+    borderColor: '#B42318',
+    borderRadius: 14,
+    backgroundColor: Brand.white,
+  },
+
+  cancelText: {
+    color: '#B42318',
+    fontWeight: '800',
+    fontSize: 13.5,
+  },
+
+  resolveButton: {
+    flex: 1,
+    minHeight: 50,
+    flexDirection: 'row',
+    gap: 6,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderRadius: 14,
+    backgroundColor: '#287550',
+    shadowColor: '#287550',
+    shadowOffset: { width: 0, height: 3 },
+    shadowOpacity: 0.22,
+    shadowRadius: 6,
+    elevation: 2,
+  },
+
+  resolveText: {
+    color: '#FFFFFF',
+    fontWeight: '900',
+    fontSize: 13.5,
+  },
+
+  /* ---------- Disclaimer ---------- */
+  disclaimer: {
+    flexDirection: 'row',
+    gap: 10,
+    marginTop: 20,
+    padding: 14,
+    borderRadius: 16,
     backgroundColor: '#FFF3D6',
+    borderWidth: 1,
+    borderColor: '#F5DCAE',
+  },
+
+  disclaimerIconWrap: {
+    width: 28,
+    height: 28,
+    borderRadius: 9,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: '#FFFFFF',
   },
 
   disclaimerText: {
-    color: '#5D4B53',
+    flex: 1,
+    color: '#74552C',
     fontSize: 12,
     lineHeight: 18,
+  },
+
+  pressed: {
+    opacity: 0.82,
   },
 });

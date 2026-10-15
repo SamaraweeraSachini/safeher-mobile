@@ -1,6 +1,14 @@
 import { Ionicons } from '@expo/vector-icons';
-import { useRouter } from 'expo-router';
-import { useState } from 'react';
+
+import {
+  type Href,
+  useRouter,
+} from 'expo-router';
+
+import {
+  useEffect,
+  useState,
+} from 'react';
 
 import {
   ActivityIndicator,
@@ -21,9 +29,7 @@ import {
   Brand,
 } from '@/constants/brand';
 
-import {
-  JOURNEY_TRUSTED_CONTACTS,
-} from '@/constants/safe-journey';
+import ScreenBackButton from '@/src/components/navigation/ScreenBackButton';
 
 import {
   usePrivacyPreferences,
@@ -48,9 +54,15 @@ import {
   SafeJourneyError,
 } from '@/src/services/safe-journey-service';
 
-function formatDateTime(
-  date: Date
-): string {
+import {
+  subscribeToTrustedContacts,
+} from '@/src/services/trusted-contact-service';
+
+import type {
+  TrustedContact,
+} from '@/src/types/trusted-contact';
+
+function formatDateTime(date: Date): string {
   return date.toLocaleString([], {
     month: 'short',
     day: 'numeric',
@@ -59,347 +71,189 @@ function formatDateTime(
   });
 }
 
-function formatCoordinate(
-  value: number
-): string {
-  return Number.isFinite(value)
-    ? value.toFixed(5)
-    : 'Unavailable';
+function formatCoordinate(value: number): string {
+  return Number.isFinite(value) ? value.toFixed(5) : 'Unavailable';
 }
 
 export default function ActiveJourneyScreen() {
-  const router =
-    useRouter();
+  const router = useRouter();
 
-  const [
-    isCheckingIn,
-    setIsCheckingIn,
-  ] = useState(false);
+  const { journey, isLoading, error, retry, refresh } =
+    useActiveSafeJourney();
 
-  const [
-    isEndingJourney,
-    setIsEndingJourney,
-  ] = useState(false);
+  const { preferences } = usePrivacyPreferences();
 
-  const {
-    journey,
-    isLoading,
-    error,
-    retry,
-    refresh,
-  } = useActiveSafeJourney();
+  const { permissionState } = useLocationPermission();
 
-  const {
-    preferences,
-  } = usePrivacyPreferences();
+  const { location } = useCurrentLocation(permissionState);
 
-  const {
-    permissionState,
-  } = useLocationPermission();
+  const [contacts, setContacts] = useState<TrustedContact[]>([]);
+  const [isCheckingIn, setIsCheckingIn] = useState(false);
+  const [isEndingJourney, setIsEndingJourney] = useState(false);
 
-  const {
-    location,
-  } = useCurrentLocation(
-    permissionState
-  );
+  useEffect(() => {
+    try {
+      const unsubscribe = subscribeToTrustedContacts(
+        setContacts,
+        () => setContacts([])
+      );
+      return unsubscribe;
+    } catch {
+      setContacts([]);
+    }
+  }, []);
 
-  const handleSafePress =
-    async () => {
-      if (!journey) {
-        return;
-      }
+  const handleSafePress = async () => {
+    if (!journey) {
+      return;
+    }
 
-      try {
-        setIsCheckingIn(
-          true
-        );
-
-        await recordSafeJourneyCheckIn(
-          journey.id
-        );
-
-        await refresh();
-
-        Alert.alert(
-          "You're checked in",
-          'Your safety check-in was recorded successfully.'
-        );
-      } catch (
-        checkInError
-      ) {
-        if (
-          checkInError instanceof
-          SafeJourneyError
-        ) {
-          Alert.alert(
-            'Check-in failed',
-            checkInError.message
-          );
-
-          return;
-        }
-
-        Alert.alert(
-          'Check-in failed',
-          'Your safety check-in could not be recorded. Please try again.'
-        );
-      } finally {
-        setIsCheckingIn(
-          false
-        );
-      }
-    };
-
-  const handleEndJourney =
-    () => {
-      if (!journey) {
-        return;
-      }
+    try {
+      setIsCheckingIn(true);
+      await recordSafeJourneyCheckIn(journey.id);
+      await refresh();
 
       Alert.alert(
-        'End Journey?',
-        'Are you sure you have reached your destination and want to complete this journey?',
-        [
-          {
-            text:
-              'Keep Journey Active',
-
-            style:
-              'cancel',
-          },
-          {
-            text:
-              'End Journey',
-
-            onPress:
-              async () => {
-                try {
-                  setIsEndingJourney(
-                    true
-                  );
-
-                  await completeSafeJourney(
-                    journey.id
-                  );
-
-                  Alert.alert(
-                    'Journey completed',
-                    'Your Safe Journey has been completed successfully.',
-                    [
-                      {
-                        text:
-                          'OK',
-
-                        onPress:
-                          () => {
-                            router.replace(
-                              '/journey'
-                            );
-                          },
-                      },
-                    ]
-                  );
-                } catch (
-                  endError
-                ) {
-                  if (
-                    endError instanceof
-                    SafeJourneyError
-                  ) {
-                    Alert.alert(
-                      'Could not end journey',
-                      endError.message
-                    );
-
-                    return;
-                  }
-
-                  Alert.alert(
-                    'Could not end journey',
-                    'Something went wrong. Please try again.'
-                  );
-                } finally {
-                  setIsEndingJourney(
-                    false
-                  );
-                }
-              },
-          },
-        ]
+        "You're checked in",
+        'Your safety check-in was recorded successfully.'
       );
-    };
-
-  const handleCancelJourney =
-    () => {
-      if (!journey) {
-        return;
-      }
-
+    } catch (checkInError) {
       Alert.alert(
-        'Cancel Journey?',
-        'Are you sure you want to cancel this Safe Journey?',
-        [
-          {
-            text:
-              'Keep Journey Active',
-
-            style:
-              'cancel',
-          },
-          {
-            text:
-              'Cancel Journey',
-
-            style:
-              'destructive',
-
-            onPress:
-              async () => {
-                try {
-                  setIsEndingJourney(
-                    true
-                  );
-
-                  await cancelSafeJourney(
-                    journey.id
-                  );
-
-                  Alert.alert(
-                    'Journey cancelled',
-                    'Your Safe Journey has been cancelled.',
-                    [
-                      {
-                        text:
-                          'OK',
-
-                        onPress:
-                          () => {
-                            router.replace(
-                              '/journey'
-                            );
-                          },
-                      },
-                    ]
-                  );
-                } catch (
-                  cancelError
-                ) {
-                  if (
-                    cancelError instanceof
-                    SafeJourneyError
-                  ) {
-                    Alert.alert(
-                      'Could not cancel journey',
-                      cancelError.message
-                    );
-
-                    return;
-                  }
-
-                  Alert.alert(
-                    'Could not cancel journey',
-                    'Something went wrong. Please try again.'
-                  );
-                } finally {
-                  setIsEndingJourney(
-                    false
-                  );
-                }
-              },
-          },
-        ]
+        'Check-in failed',
+        checkInError instanceof SafeJourneyError
+          ? checkInError.message
+          : 'Your safety check-in could not be recorded.'
       );
-    };
+    } finally {
+      setIsCheckingIn(false);
+    }
+  };
 
-  const handleSosPress =
-    () => {
-      router.push(
-        '/sos'
+  const handleEndJourney = () => {
+    if (!journey) {
+      return;
+    }
+
+    Alert.alert(
+      'End Journey?',
+      'Are you sure you have reached your destination?',
+      [
+        { text: 'Keep Journey Active', style: 'cancel' },
+        {
+          text: 'End Journey',
+          onPress: async () => {
+            try {
+              setIsEndingJourney(true);
+              await completeSafeJourney(journey.id);
+
+              Alert.alert(
+                'Journey completed',
+                'This journey is now marked as completed.',
+                [
+                  {
+                    text: 'OK',
+                    onPress: () => router.replace('/journey' as Href),
+                  },
+                ]
+              );
+            } catch (endError) {
+              Alert.alert(
+                'Could not end journey',
+                endError instanceof SafeJourneyError
+                  ? endError.message
+                  : 'Please try again.'
+              );
+            } finally {
+              setIsEndingJourney(false);
+            }
+          },
+        },
+      ]
+    );
+  };
+
+  const handleCancelJourney = () => {
+    if (!journey) {
+      return;
+    }
+
+    Alert.alert(
+      'Cancel Journey?',
+      'The journey will remain in history with a Cancelled status.',
+      [
+        { text: 'Keep Journey Active', style: 'cancel' },
+        {
+          text: 'Cancel Journey',
+          style: 'destructive',
+          onPress: async () => {
+            try {
+              setIsEndingJourney(true);
+              await cancelSafeJourney(journey.id);
+
+              Alert.alert(
+                'Journey cancelled',
+                'The journey was retained in history.',
+                [
+                  {
+                    text: 'OK',
+                    onPress: () => router.replace('/journey' as Href),
+                  },
+                ]
+              );
+            } catch (cancelError) {
+              Alert.alert(
+                'Could not cancel journey',
+                cancelError instanceof SafeJourneyError
+                  ? cancelError.message
+                  : 'Please try again.'
+              );
+            } finally {
+              setIsEndingJourney(false);
+            }
+          },
+        },
+      ]
+    );
+  };
+
+  const handleShareLocation = async () => {
+    if (!journey) {
+      return;
+    }
+
+    const latitude = location?.latitude ?? journey.currentLocation.latitude;
+    const longitude =
+      location?.longitude ?? journey.currentLocation.longitude;
+
+    if (!Number.isFinite(latitude) || !Number.isFinite(longitude)) {
+      Alert.alert(
+        'Location unavailable',
+        'Your current location could not be shared.'
       );
-    };
+      return;
+    }
 
-  const handleShareLocation =
-    async () => {
-      if (!journey) {
-        return;
-      }
+    const link = `https://www.google.com/maps?q=${latitude},${longitude}`;
 
-      const latitude =
-        location?.latitude ??
-        journey.currentLocation
-          .latitude;
-
-      const longitude =
-        location?.longitude ??
-        journey.currentLocation
-          .longitude;
-
-      if (
-        !Number.isFinite(
-          latitude
-        ) ||
-        !Number.isFinite(
-          longitude
-        )
-      ) {
-        Alert.alert(
-          'Location unavailable',
-          'Your current location could not be shared.'
-        );
-
-        return;
-      }
-
-      const googleMapsLink =
-        `https://www.google.com/maps?q=${latitude},${longitude}`;
-
-      try {
-        await Share.share({
-          title:
-            'SafeHer Journey Location',
-
-          message:
-            `My current SafeHer journey location:\n${googleMapsLink}`,
-        });
-      } catch (
-        shareError
-      ) {
-        console.error(
-          'Location sharing failed:',
-          shareError
-        );
-
-        Alert.alert(
-          'Sharing failed',
-          'Your location could not be shared. Please try again.'
-        );
-      }
-    };
+    try {
+      await Share.share({
+        title: 'SafeHer Journey Location',
+        message: `My current SafeHer journey location:\n${link}`,
+      });
+    } catch {
+      Alert.alert(
+        'Sharing failed',
+        'Your location could not be shared.'
+      );
+    }
+  };
 
   if (isLoading) {
     return (
-      <SafeAreaView
-        style={
-          styles.safeArea
-        }
-      >
-        <View
-          style={
-            styles.centerState
-          }
-        >
-          <ActivityIndicator
-            size="large"
-            color={
-              Brand.burgundy
-            }
-          />
-
-          <Text
-            style={
-              styles.stateText
-            }
-          >
+      <SafeAreaView style={styles.safeArea}>
+        <View style={styles.center}>
+          <ActivityIndicator size="large" color={Brand.burgundy} />
+          <Text style={styles.helperText}>
             Loading active journey...
           </Text>
         </View>
@@ -409,53 +263,26 @@ export default function ActiveJourneyScreen() {
 
   if (error) {
     return (
-      <SafeAreaView
-        style={
-          styles.safeArea
-        }
-      >
-        <View
-          style={
-            styles.centerState
-          }
-        >
-          <Ionicons
-            name="cloud-offline-outline"
-            size={38}
-            color="#B42318"
-          />
-
-          <Text
-            style={
-              styles.errorTitle
-            }
-          >
-            Journey unavailable
-          </Text>
-
-          <Text
-            style={
-              styles.errorText
-            }
-          >
-            {error}
-          </Text>
+      <SafeAreaView style={styles.safeArea}>
+        <View style={styles.center}>
+          <View style={styles.stateIconWrap}>
+            <Ionicons
+              name="alert-circle-outline"
+              size={36}
+              color={Brand.burgundy}
+            />
+          </View>
+          <Text style={styles.heading}>Journey unavailable</Text>
+          <Text style={styles.helperText}>{error}</Text>
 
           <Pressable
-            style={
-              styles.retryButton
-            }
-            onPress={
-              retry
-            }
+            style={({ pressed }) => [
+              styles.primaryButton,
+              pressed && styles.pressed,
+            ]}
+            onPress={retry}
           >
-            <Text
-              style={
-                styles.retryButtonText
-              }
-            >
-              Try Again
-            </Text>
+            <Text style={styles.primaryText}>Try Again</Text>
           </Pressable>
         </View>
       </SafeAreaView>
@@ -464,1007 +291,661 @@ export default function ActiveJourneyScreen() {
 
   if (!journey) {
     return (
-      <SafeAreaView
-        style={
-          styles.safeArea
-        }
-      >
-        <View
-          style={
-            styles.centerState
-          }
-        >
-          <Ionicons
-            name="navigate-outline"
-            size={44}
-            color={
-              Brand.burgundy
-            }
-          />
-
-          <Text
-            style={
-              styles.errorTitle
-            }
-          >
-            No active journey
-          </Text>
-
-          <Text
-            style={
-              styles.stateText
-            }
-          >
-            Start a Safe Journey first
-            to view its status here.
-          </Text>
+      <SafeAreaView style={styles.safeArea}>
+        <View style={styles.center}>
+          <View style={styles.stateIconWrap}>
+            <Ionicons
+              name="navigate-outline"
+              size={36}
+              color={Brand.burgundy}
+            />
+          </View>
+          <Text style={styles.heading}>No active journey</Text>
 
           <Pressable
-            style={
-              styles.retryButton
-            }
-            onPress={() =>
-              router.replace(
-                '/journey'
-              )
-            }
+            style={({ pressed }) => [
+              styles.primaryButton,
+              pressed && styles.pressed,
+            ]}
+            onPress={() => router.replace('/journey' as Href)}
           >
-            <Text
-              style={
-                styles.retryButtonText
-              }
-            >
-              Start Journey
-            </Text>
+            <Text style={styles.primaryText}>Back to Journey</Text>
           </Pressable>
         </View>
       </SafeAreaView>
     );
   }
 
-  const lastCheckInReference =
-    journey.lastCheckInAt ??
-    journey.createdAt;
+  const referenceTime = journey.lastCheckInAt ?? journey.createdAt;
 
-  const nextCheckIn =
-    new Date(
-      lastCheckInReference.getTime() +
-        journey.checkInIntervalMinutes *
-          60 *
-          1000
-    );
+  const nextCheckIn = new Date(
+    referenceTime.getTime() +
+      journey.checkInIntervalMinutes * 60 * 1000
+  );
 
-  const contacts =
-    JOURNEY_TRUSTED_CONTACTS.filter(
-      contact =>
-        journey.trustedContactIds.includes(
-          contact.id
-        )
-    );
+  const journeyContacts = contacts.filter(contact =>
+    journey.trustedContactIds.includes(contact.id)
+  );
+
+  const latitude = location?.latitude ?? journey.currentLocation.latitude;
+  const longitude =
+    location?.longitude ?? journey.currentLocation.longitude;
+
+  const busy = isCheckingIn || isEndingJourney;
 
   return (
-    <SafeAreaView
-      style={
-        styles.safeArea
-      }
-      edges={['top']}
-    >
-      <ScrollView
-        contentContainerStyle={
-          styles.content
-        }
-        showsVerticalScrollIndicator={
-          false
-        }
-      >
-        <View
-          style={
-            styles.header
-          }
-        >
-          <View
-            style={
-              styles.headerIcon
-            }
-          >
-            <Ionicons
-              name="navigate"
-              size={24}
-              color={
-                Brand.white
-              }
-            />
+    <SafeAreaView style={styles.safeArea} edges={['top']}>
+      <ScrollView contentContainerStyle={styles.content}>
+        <ScreenBackButton label="Journey" />
+
+        {/* ---------- Header ---------- */}
+        <View style={styles.header}>
+          <View style={styles.headerIcon}>
+            <Ionicons name="navigate" size={22} color={Brand.white} />
           </View>
 
-          <View>
-            <Text
-              style={
-                styles.title
-              }
-            >
-              Active Journey
-            </Text>
+          <View style={{ flex: 1 }}>
+            <Text style={styles.heading}>Active Journey</Text>
 
-            <Text
-              style={
-                styles.activeText
-              }
-            >
-              Journey in progress
-            </Text>
-          </View>
-        </View>
-
-        <View
-          style={
-            styles.destinationCard
-          }
-        >
-          <Text
-            style={
-              styles.smallLabel
-            }
-          >
-            Destination
-          </Text>
-
-          <View
-            style={
-              styles.destinationRow
-            }
-          >
-            <Ionicons
-              name="location"
-              size={22}
-              color={
-                Brand.burgundy
-              }
-            />
-
-            <Text
-              style={
-                styles.destinationText
-              }
-            >
-              {
-                journey.destination
-              }
-            </Text>
-          </View>
-        </View>
-
-        <View
-          style={
-            styles.section
-          }
-        >
-          <Text
-            style={
-              styles.sectionTitle
-            }
-          >
-            Current location
-          </Text>
-
-          <View
-            style={
-              styles.infoCard
-            }
-          >
-            <Ionicons
-              name="locate-outline"
-              size={21}
-              color={
-                Brand.burgundy
-              }
-            />
-
-            <View>
-              <Text
-                style={
-                  styles.infoPrimary
-                }
-              >
-                {formatCoordinate(
-                  location?.latitude ??
-                    journey
-                      .currentLocation
-                      .latitude
-                )}
-                ,{' '}
-                {formatCoordinate(
-                  location?.longitude ??
-                    journey
-                      .currentLocation
-                      .longitude
-                )}
-              </Text>
-
-              <Text
-                style={
-                  styles.infoSecondary
-                }
-              >
-                {location
-                  ? 'Current device location'
-                  : 'Journey starting location'}
-              </Text>
+            <View style={styles.activeStatusRow}>
+              <View style={styles.liveDot} />
+              <Text style={styles.activeText}>Journey in progress</Text>
             </View>
           </View>
         </View>
 
-        <View
-          style={
-            styles.section
-          }
-        >
-          <Text
-            style={
-              styles.sectionTitle
-            }
-          >
-            Journey times
-          </Text>
+        {/* ---------- Destination ---------- */}
+        <View style={styles.heroCard}>
+          <View style={styles.heroIconWrap}>
+            <Ionicons
+              name="flag-outline"
+              size={20}
+              color={Brand.burgundy}
+            />
+          </View>
 
-          <View
-            style={
-              styles.timeGrid
-            }
-          >
-            <View
-              style={
-                styles.timeCard
-              }
-            >
+          <Text style={styles.label}>DESTINATION</Text>
+          <Text style={styles.destination}>{journey.destination}</Text>
+        </View>
+
+        {/* ---------- Location ---------- */}
+        <View style={styles.card}>
+          <View style={styles.cardTopRow}>
+            <View style={styles.cardIconWrap}>
+              <Ionicons
+                name="location-outline"
+                size={18}
+                color={Brand.burgundy}
+              />
+            </View>
+            <Text style={styles.label}>CURRENT LOCATION</Text>
+          </View>
+
+          <Text style={styles.value}>
+            {formatCoordinate(latitude)}, {formatCoordinate(longitude)}
+          </Text>
+        </View>
+
+        {/* ---------- Started / Expected ---------- */}
+        <View style={styles.twoColumns}>
+          <View style={styles.smallCard}>
+            <View style={styles.cardIconWrapSmall}>
               <Ionicons
                 name="play-outline"
-                size={19}
-                color={
-                  Brand.burgundy
-                }
+                size={15}
+                color={Brand.burgundy}
               />
-
-              <Text
-                style={
-                  styles.smallLabel
-                }
-              >
-                Started
-              </Text>
-
-              <Text
-                style={
-                  styles.timeValue
-                }
-              >
-                {formatDateTime(
-                  journey.createdAt
-                )}
-              </Text>
             </View>
+            <Text style={styles.label}>STARTED</Text>
+            <Text style={styles.value}>
+              {formatDateTime(journey.createdAt)}
+            </Text>
+          </View>
 
-            <View
-              style={
-                styles.timeCard
-              }
-            >
+          <View style={styles.smallCard}>
+            <View style={styles.cardIconWrapSmall}>
               <Ionicons
-                name="flag-outline"
-                size={19}
-                color={
-                  Brand.burgundy
-                }
+                name="time-outline"
+                size={15}
+                color="#287550"
               />
-
-              <Text
-                style={
-                  styles.smallLabel
-                }
-              >
-                Expected arrival
-              </Text>
-
-              <Text
-                style={
-                  styles.timeValue
-                }
-              >
-                {formatDateTime(
-                  journey.expectedArrivalTime
-                )}
-              </Text>
             </View>
+            <Text style={styles.label}>EXPECTED</Text>
+            <Text style={styles.value}>
+              {formatDateTime(journey.expectedArrivalTime)}
+            </Text>
           </View>
         </View>
 
-        <View
-          style={
-            styles.section
-          }
-        >
-          <Text
-            style={
-              styles.sectionTitle
-            }
-          >
-            Next check-in
-          </Text>
-
-          {preferences.safetyAlerts ? (
-            <View
-              style={
-                styles.checkInCard
-              }
-            >
-              <View
-                style={
-                  styles.checkInIcon
-                }
-              >
-                <Ionicons
-                  name="timer-outline"
-                  size={23}
-                  color={
-                    Brand.white
-                  }
-                />
-              </View>
-
-              <View>
-                <Text
-                  style={
-                    styles.checkInTime
-                  }
-                >
-                  {formatDateTime(
-                    nextCheckIn
-                  )}
-                </Text>
-
-                <Text
-                  style={
-                    styles.infoSecondary
-                  }
-                >
-                  Every{' '}
-                  {
-                    journey
-                      .checkInIntervalMinutes
-                  }{' '}
-                  minutes
-                </Text>
-              </View>
-            </View>
-          ) : (
-            <View
-              style={
-                styles.infoCard
-              }
-            >
+        {/* ---------- Next Check-in ---------- */}
+        {preferences.safetyAlerts ? (
+          <View style={styles.checkInCard}>
+            <View style={styles.checkInIconWrap}>
               <Ionicons
-                name="notifications-off-outline"
-                size={21}
-                color={
-                  Brand.muted
-                }
+                name="timer-outline"
+                size={22}
+                color="#287550"
               />
+            </View>
 
-              <Text
-                style={
-                  styles.infoSecondary
-                }
-              >
-                Safety check-in alerts are
-                turned off in Privacy
-                Settings.
+            <View style={{ flex: 1 }}>
+              <Text style={styles.checkInTitle}>Next check-in</Text>
+              <Text style={styles.checkInValue}>
+                {formatDateTime(nextCheckIn)}
               </Text>
             </View>
-          )}
-        </View>
+          </View>
+        ) : null}
 
-        <View
-          style={
-            styles.section
-          }
-        >
-          <Text
-            style={
-              styles.sectionTitle
-            }
-          >
-            Trusted contacts
-          </Text>
-
-          {!preferences.shareJourneys ? (
-            <View
-              style={
-                styles.infoCard
-              }
-            >
+        {/* ---------- Trusted Contacts ---------- */}
+        <View style={styles.card}>
+          <View style={styles.cardTopRow}>
+            <View style={styles.cardIconWrap}>
               <Ionicons
-                name="eye-off-outline"
-                size={21}
-                color={
-                  Brand.muted
-                }
+                name="people-outline"
+                size={18}
+                color={Brand.burgundy}
               />
-
-              <Text
-                style={
-                  styles.infoSecondary
-                }
-              >
-                Journey sharing is turned
-                off, so trusted contacts
-                are not shown.
-              </Text>
             </View>
-          ) : contacts.length > 0 ? (
-            contacts.map(
-              contact => (
-                <View
-                  key={
-                    contact.id
-                  }
-                  style={
-                    styles.contactCard
-                  }
-                >
-                  <View
-                    style={
-                      styles.contactAvatar
-                    }
-                  >
+            <Text style={styles.label}>TRUSTED CONTACTS</Text>
+          </View>
+
+          {preferences.shareJourneys && journey.shareJourney ? (
+            journeyContacts.length > 0 ? (
+              journeyContacts.map(contact => (
+                <View key={contact.id} style={styles.contactRow}>
+                  <View style={styles.contactAvatar}>
                     <Ionicons
                       name="person"
-                      size={18}
-                      color={
-                        Brand.burgundy
-                      }
+                      size={14}
+                      color={Brand.burgundy}
                     />
                   </View>
 
-                  <Text
-                    style={
-                      styles.contactName
-                    }
-                  >
-                    {
-                      contact.name
-                    }
+                  <Text style={styles.contact}>
+                    {contact.name}
+                    {contact.relationship
+                      ? ` · ${contact.relationship}`
+                      : ''}
                   </Text>
                 </View>
-              )
+              ))
+            ) : (
+              <Text style={styles.helperText}>
+                Saved contact names are unavailable.
+              </Text>
             )
           ) : (
-            <View
-              style={
-                styles.infoCard
-              }
-            >
-              <Ionicons
-                name="people-outline"
-                size={21}
-                color={
-                  Brand.muted
-                }
-              />
-
-              <Text
-                style={
-                  styles.infoSecondary
-                }
-              >
-                No trusted contacts
-                selected.
-              </Text>
-            </View>
+            <Text style={styles.helperText}>
+              Journey sharing is hidden by your privacy settings.
+            </Text>
           )}
         </View>
 
+        {/* ---------- Share Location ---------- */}
         <Pressable
-          style={
-            styles.shareLocationButton
-          }
-          onPress={
-            handleShareLocation
-          }
-          accessibilityRole="button"
-          accessibilityLabel="Share current location"
+          style={({ pressed }) => [
+            styles.shareButton,
+            pressed && styles.pressed,
+          ]}
+          onPress={handleShareLocation}
         >
           <Ionicons
             name="share-social-outline"
-            size={21}
-            color={
-              Brand.burgundy
-            }
+            size={20}
+            color={Brand.burgundy}
           />
-
-          <Text
-            style={
-              styles.shareLocationButtonText
-            }
-          >
-            Share Current Location
-          </Text>
+          <Text style={styles.shareText}>Share Current Location</Text>
         </Pressable>
 
+        {/* ---------- I'm Safe ---------- */}
         <Pressable
-          style={[
+          style={({ pressed }) => [
             styles.safeButton,
-
-            isCheckingIn &&
-              styles.safeButtonDisabled,
+            busy && styles.disabled,
+            pressed && !busy && styles.pressed,
           ]}
-          onPress={
-            handleSafePress
-          }
-          disabled={
-            isCheckingIn
-          }
-          accessibilityRole="button"
-          accessibilityLabel="I'm Safe"
+          disabled={busy}
+          onPress={handleSafePress}
         >
           {isCheckingIn ? (
-            <ActivityIndicator
-              size="small"
-              color={
-                Brand.white
-              }
-            />
+            <ActivityIndicator color="#FFFFFF" />
           ) : (
             <Ionicons
               name="shield-checkmark"
-              size={22}
-              color={
-                Brand.white
-              }
+              size={21}
+              color="#FFFFFF"
             />
           )}
 
-          <Text
-            style={
-              styles.primaryButtonText
-            }
-          >
-            {isCheckingIn
-              ? 'Checking In...'
-              : "I'm Safe"}
+          <Text style={styles.safeText}>
+            {isCheckingIn ? 'Checking In...' : "I'm Safe"}
           </Text>
         </Pressable>
 
-        <View
-          style={
-            styles.actionRow
-          }
-        >
+        {/* ---------- End / Cancel ---------- */}
+        <View style={styles.twoColumns}>
           <Pressable
-            style={[
-              styles.secondaryButton,
-
-              isEndingJourney &&
-                styles.actionButtonDisabled,
+            style={({ pressed }) => [
+              styles.endButton,
+              busy && styles.disabled,
+              pressed && !busy && styles.pressed,
             ]}
-            onPress={
-              handleEndJourney
-            }
-            disabled={
-              isEndingJourney
-            }
+            disabled={busy}
+            onPress={handleEndJourney}
           >
             <Ionicons
               name="checkmark-circle-outline"
-              size={20}
-              color={
-                Brand.burgundy
-              }
+              size={17}
+              color={Brand.burgundy}
             />
-
-            <Text
-              style={
-                styles.secondaryButtonText
-              }
-            >
-              End Journey
-            </Text>
+            <Text style={styles.endText}>End Journey</Text>
           </Pressable>
 
           <Pressable
-            style={[
-              styles.secondaryButton,
-
-              isEndingJourney &&
-                styles.actionButtonDisabled,
+            style={({ pressed }) => [
+              styles.cancelButton,
+              busy && styles.disabled,
+              pressed && !busy && styles.pressed,
             ]}
-            onPress={
-              handleCancelJourney
-            }
-            disabled={
-              isEndingJourney
-            }
+            disabled={busy}
+            onPress={handleCancelJourney}
           >
             <Ionicons
               name="close-circle-outline"
-              size={20}
-              color={
-                Brand.burgundy
-              }
+              size={17}
+              color="#B42318"
             />
-
-            <Text
-              style={
-                styles.secondaryButtonText
-              }
-            >
-              Cancel Journey
-            </Text>
+            <Text style={styles.cancelText}>Cancel Journey</Text>
           </Pressable>
         </View>
 
+        {/* ---------- SOS ---------- */}
         <Pressable
-          style={
-            styles.sosButton
-          }
-          onPress={
-            handleSosPress
-          }
+          style={({ pressed }) => [
+            styles.sosButton,
+            pressed && styles.pressed,
+          ]}
+          onPress={() => router.push('/sos' as Href)}
         >
-          <Ionicons
-            name="alert-circle"
-            size={22}
-            color={
-              Brand.white
-            }
-          />
-
-          <Text
-            style={
-              styles.primaryButtonText
-            }
-          >
-            SOS
-          </Text>
+          <Ionicons name="alert-circle" size={21} color="#FFFFFF" />
+          <Text style={styles.sosText}>SOS Assistance</Text>
         </Pressable>
       </ScrollView>
     </SafeAreaView>
   );
 }
 
-const styles =
-  StyleSheet.create({
-    safeArea: {
-      flex: 1,
-      backgroundColor:
-        Brand.cream,
-    },
+const styles = StyleSheet.create({
+  safeArea: {
+    flex: 1,
+    backgroundColor: Brand.cream,
+  },
 
-    content: {
-      paddingHorizontal: 20,
-      paddingTop: 18,
-      paddingBottom: 40,
-    },
+  content: {
+    paddingHorizontal: 20,
+    paddingTop: 14,
+    paddingBottom: 44,
+  },
 
-    header: {
-      flexDirection: 'row',
-      alignItems: 'center',
-      gap: 12,
-      marginBottom: 22,
-    },
+  center: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: 30,
+  },
 
-    headerIcon: {
-      width: 48,
-      height: 48,
-      alignItems: 'center',
-      justifyContent:
-        'center',
-      borderRadius: 15,
-      backgroundColor:
-        Brand.burgundy,
-    },
+  stateIconWrap: {
+    width: 76,
+    height: 76,
+    borderRadius: 22,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: Brand.blush,
+    marginBottom: 14,
+  },
 
-    title: {
-      color: Brand.ink,
-      fontSize: 24,
-      fontWeight: '900',
-    },
+  /* ---------- Header ---------- */
+  header: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+    marginBottom: 18,
+  },
 
-    activeText: {
-      marginTop: 2,
-      color: '#38785A',
-      fontSize: 12,
-      fontWeight: '700',
-    },
+  headerIcon: {
+    width: 50,
+    height: 50,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderRadius: 16,
+    backgroundColor: Brand.burgundy,
+    shadowColor: Brand.burgundy,
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.25,
+    shadowRadius: 8,
+    elevation: 3,
+  },
 
-    destinationCard: {
-      marginBottom: 22,
-      padding: 17,
-      borderWidth: 1,
-      borderColor:
-        Brand.line,
-      borderRadius: 18,
-      backgroundColor:
-        Brand.white,
-    },
+  heading: {
+    color: Brand.ink,
+    fontSize: 23,
+    fontWeight: '900',
+    letterSpacing: -0.3,
+  },
 
-    destinationRow: {
-      flexDirection: 'row',
-      alignItems: 'center',
-      gap: 9,
-      marginTop: 7,
-    },
+  activeStatusRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    marginTop: 4,
+  },
 
-    destinationText: {
-      flex: 1,
-      color: Brand.ink,
-      fontSize: 18,
-      fontWeight: '800',
-    },
+  liveDot: {
+    width: 7,
+    height: 7,
+    borderRadius: 4,
+    backgroundColor: '#287550',
+  },
 
-    section: {
-      marginBottom: 22,
-    },
+  activeText: {
+    color: '#287550',
+    fontWeight: '800',
+    fontSize: 12.5,
+  },
 
-    sectionTitle: {
-      marginBottom: 9,
-      color: Brand.ink,
-      fontSize: 15,
-      fontWeight: '800',
-    },
+  /* ---------- Hero card ---------- */
+  heroCard: {
+    marginBottom: 12,
+    padding: 16,
+    borderWidth: 1,
+    borderColor: Brand.roseSoft,
+    borderRadius: 18,
+    backgroundColor: Brand.blush,
+  },
 
-    infoCard: {
-      minHeight: 60,
-      flexDirection: 'row',
-      alignItems: 'center',
-      gap: 11,
-      padding: 14,
-      borderWidth: 1,
-      borderColor:
-        Brand.line,
-      borderRadius: 15,
-      backgroundColor:
-        Brand.white,
-    },
+  heroIconWrap: {
+    width: 38,
+    height: 38,
+    borderRadius: 12,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: Brand.white,
+    marginBottom: 10,
+  },
 
-    infoPrimary: {
-      color: Brand.ink,
-      fontSize: 14,
-      fontWeight: '700',
-    },
+  /* ---------- Cards ---------- */
+  card: {
+    marginBottom: 12,
+    padding: 15,
+    borderWidth: 1,
+    borderColor: Brand.line,
+    borderRadius: 18,
+    backgroundColor: Brand.white,
+    shadowColor: '#4E1026',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.04,
+    shadowRadius: 6,
+    elevation: 1,
+  },
 
-    infoSecondary: {
-      flex: 1,
-      marginTop: 2,
-      color: Brand.muted,
-      fontSize: 11,
-      lineHeight: 16,
-    },
+  cardTopRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
 
-    timeGrid: {
-      flexDirection: 'row',
-      gap: 10,
-    },
+  cardIconWrap: {
+    width: 30,
+    height: 30,
+    borderRadius: 10,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: Brand.blush,
+  },
 
-    timeCard: {
-      flex: 1,
-      minHeight: 105,
-      padding: 13,
-      borderWidth: 1,
-      borderColor:
-        Brand.line,
-      borderRadius: 15,
-      backgroundColor:
-        Brand.white,
-    },
+  cardIconWrapSmall: {
+    width: 26,
+    height: 26,
+    borderRadius: 9,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: Brand.blush,
+    marginBottom: 8,
+  },
 
-    smallLabel: {
-      marginTop: 6,
-      color: Brand.muted,
-      fontSize: 11,
-      fontWeight: '600',
-    },
+  label: {
+    color: Brand.muted,
+    fontSize: 10,
+    fontWeight: '900',
+    letterSpacing: 0.6,
+  },
 
-    timeValue: {
-      marginTop: 4,
-      color: Brand.ink,
-      fontSize: 12,
-      fontWeight: '700',
-      lineHeight: 17,
-    },
+  destination: {
+    marginTop: 8,
+    color: Brand.ink,
+    fontSize: 17,
+    fontWeight: '900',
+    letterSpacing: -0.1,
+  },
 
-    checkInCard: {
-      flexDirection: 'row',
-      alignItems: 'center',
-      gap: 12,
-      padding: 15,
-      borderRadius: 17,
-      backgroundColor:
-        Brand.blush,
-    },
+  value: {
+    marginTop: 8,
+    color: Brand.ink,
+    fontSize: 12.5,
+    fontWeight: '700',
+    letterSpacing: 0.1,
+  },
 
-    checkInIcon: {
-      width: 44,
-      height: 44,
-      alignItems: 'center',
-      justifyContent:
-        'center',
-      borderRadius: 22,
-      backgroundColor:
-        Brand.burgundy,
-    },
+  helperText: {
+    marginTop: 8,
+    color: Brand.muted,
+    fontSize: 12,
+    lineHeight: 17,
+  },
 
-    checkInTime: {
-      color: Brand.ink,
-      fontSize: 15,
-      fontWeight: '800',
-    },
+  twoColumns: {
+    flexDirection: 'row',
+    gap: 10,
+    marginBottom: 12,
+  },
 
-    contactCard: {
-      flexDirection: 'row',
-      alignItems: 'center',
-      marginBottom: 8,
-      padding: 12,
-      borderWidth: 1,
-      borderColor:
-        Brand.line,
-      borderRadius: 14,
-      backgroundColor:
-        Brand.white,
-    },
+  smallCard: {
+    flex: 1,
+    padding: 13,
+    borderWidth: 1,
+    borderColor: Brand.line,
+    borderRadius: 16,
+    backgroundColor: Brand.white,
+  },
 
-    contactAvatar: {
-      width: 38,
-      height: 38,
-      alignItems: 'center',
-      justifyContent:
-        'center',
-      borderRadius: 19,
-      backgroundColor:
-        Brand.blush,
-    },
+  /* ---------- Check-in ---------- */
+  checkInCard: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+    marginBottom: 12,
+    padding: 15,
+    borderRadius: 18,
+    backgroundColor: '#E8F5ED',
+    borderWidth: 1,
+    borderColor: '#B7DEC9',
+  },
 
-    contactName: {
-      marginLeft: 10,
-      color: Brand.ink,
-      fontSize: 14,
-      fontWeight: '700',
-    },
+  checkInIconWrap: {
+    width: 42,
+    height: 42,
+    borderRadius: 14,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: '#FFFFFF',
+  },
 
-    shareLocationButton: {
-      minHeight: 52,
-      flexDirection: 'row',
-      alignItems: 'center',
-      justifyContent:
-        'center',
-      gap: 8,
-      marginBottom: 11,
-      borderWidth: 1,
-      borderColor:
-        Brand.burgundy,
-      borderRadius: 15,
-      backgroundColor:
-        Brand.white,
-    },
+  checkInTitle: {
+    color: '#287550',
+    fontWeight: '900',
+    fontSize: 14,
+  },
 
-    shareLocationButtonText: {
-      color:
-        Brand.burgundy,
-      fontSize: 14,
-      fontWeight: '800',
-    },
+  checkInValue: {
+    marginTop: 3,
+    color: '#392631',
+    fontSize: 12.5,
+    fontWeight: '700',
+  },
 
-    safeButton: {
-      minHeight: 54,
-      flexDirection: 'row',
-      alignItems: 'center',
-      justifyContent:
-        'center',
-      gap: 8,
-      borderRadius: 15,
-      backgroundColor:
-        '#38785A',
-    },
+  /* ---------- Contacts ---------- */
+  contactRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 9,
+    marginTop: 9,
+  },
 
-    safeButtonDisabled: {
-      opacity: 0.6,
-    },
+  contactAvatar: {
+    width: 26,
+    height: 26,
+    borderRadius: 13,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: Brand.blush,
+  },
 
-    primaryButtonText: {
-      color:
-        Brand.white,
-      fontSize: 15,
-      fontWeight: '800',
-    },
+  contact: {
+    color: Brand.ink,
+    fontWeight: '700',
+    fontSize: 13,
+  },
 
-    actionRow: {
-      flexDirection: 'row',
-      gap: 10,
-      marginTop: 11,
-    },
+  /* ---------- Buttons ---------- */
+  shareButton: {
+    minHeight: 54,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+    borderWidth: 1.5,
+    borderColor: Brand.burgundy,
+    borderRadius: 15,
+    backgroundColor: Brand.white,
+  },
 
-    secondaryButton: {
-      flex: 1,
-      minHeight: 50,
-      flexDirection: 'row',
-      alignItems: 'center',
-      justifyContent:
-        'center',
-      gap: 6,
-      borderWidth: 1,
-      borderColor:
-        Brand.burgundy,
-      borderRadius: 14,
-      backgroundColor:
-        Brand.white,
-    },
+  shareText: {
+    color: Brand.burgundy,
+    fontWeight: '900',
+    fontSize: 14.5,
+  },
 
-    actionButtonDisabled: {
-      opacity: 0.5,
-    },
+  safeButton: {
+    minHeight: 56,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+    marginTop: 10,
+    borderRadius: 15,
+    backgroundColor: '#287550',
+    shadowColor: '#287550',
+    shadowOffset: { width: 0, height: 5 },
+    shadowOpacity: 0.25,
+    shadowRadius: 10,
+    elevation: 4,
+  },
 
-    secondaryButtonText: {
-      color:
-        Brand.burgundy,
-      fontSize: 12,
-      fontWeight: '800',
-    },
+  safeText: {
+    color: '#FFFFFF',
+    fontWeight: '900',
+    fontSize: 15,
+    letterSpacing: 0.2,
+  },
 
-    sosButton: {
-      minHeight: 54,
-      flexDirection: 'row',
-      alignItems: 'center',
-      justifyContent:
-        'center',
-      gap: 8,
-      marginTop: 11,
-      borderRadius: 15,
-      backgroundColor:
-        '#B42318',
-    },
+  endButton: {
+    flex: 1,
+    minHeight: 50,
+    flexDirection: 'row',
+    gap: 6,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 1.5,
+    borderColor: Brand.burgundy,
+    borderRadius: 14,
+    backgroundColor: Brand.white,
+  },
 
-    centerState: {
-      flex: 1,
-      alignItems: 'center',
-      justifyContent:
-        'center',
-      paddingHorizontal: 30,
-    },
+  endText: {
+    color: Brand.burgundy,
+    fontWeight: '800',
+    fontSize: 13.5,
+  },
 
-    stateText: {
-      marginTop: 10,
-      color: Brand.muted,
-      fontSize: 13,
-      lineHeight: 19,
-      textAlign: 'center',
-    },
+  cancelButton: {
+    flex: 1,
+    minHeight: 50,
+    flexDirection: 'row',
+    gap: 6,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 1.5,
+    borderColor: '#B42318',
+    borderRadius: 14,
+    backgroundColor: Brand.white,
+  },
 
-    errorTitle: {
-      marginTop: 10,
-      color: Brand.ink,
-      fontSize: 18,
-      fontWeight: '800',
-    },
+  cancelText: {
+    color: '#B42318',
+    fontWeight: '800',
+    fontSize: 13.5,
+  },
 
-    errorText: {
-      marginTop: 6,
-      color: Brand.muted,
-      fontSize: 12,
-      lineHeight: 18,
-      textAlign: 'center',
-    },
+  sosButton: {
+    minHeight: 56,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+    borderRadius: 15,
+    backgroundColor: '#B42318',
+    shadowColor: '#B42318',
+    shadowOffset: { width: 0, height: 5 },
+    shadowOpacity: 0.3,
+    shadowRadius: 10,
+    elevation: 4,
+    marginTop: 4,
+  },
 
-    retryButton: {
-      marginTop: 18,
-      paddingVertical: 11,
-      paddingHorizontal: 20,
-      borderRadius: 13,
-      backgroundColor:
-        Brand.burgundy,
-    },
+  sosText: {
+    color: '#FFFFFF',
+    fontWeight: '900',
+    fontSize: 15,
+    letterSpacing: 0.2,
+  },
 
-    retryButtonText: {
-      color:
-        Brand.white,
-      fontSize: 13,
-      fontWeight: '800',
-    },
-  });
+  primaryButton: {
+    marginTop: 18,
+    paddingHorizontal: 26,
+    paddingVertical: 14,
+    borderRadius: 14,
+    backgroundColor: Brand.burgundy,
+    shadowColor: Brand.burgundy,
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.25,
+    shadowRadius: 8,
+    elevation: 3,
+  },
+
+  primaryText: {
+    color: '#FFFFFF',
+    fontWeight: '800',
+    fontSize: 14.5,
+  },
+
+  disabled: {
+    opacity: 0.55,
+    shadowOpacity: 0,
+    elevation: 0,
+  },
+
+  pressed: {
+    opacity: 0.82,
+  },
+});

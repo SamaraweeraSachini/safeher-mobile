@@ -66,31 +66,19 @@ export default function LoginScreen() {
   }
 
   async function handleLogin() {
-    if (
-      isLoading ||
-      guestLoading ||
-      !validateForm()
-    ) {
+    if (isLoading || guestLoading || !validateForm()) {
       return;
     }
 
     setIsLoading(true);
-
     setErrors({});
 
     try {
-      await loginUser(
-        email,
-        password
-      );
-
+      await loginUser(email, password);
       router.replace('/(tabs)');
     } catch (error) {
       setErrors({
-        general:
-          getAuthenticationError(
-            error
-          ),
+        general: getAuthenticationError(error),
       });
     } finally {
       setIsLoading(false);
@@ -98,25 +86,16 @@ export default function LoginScreen() {
   }
 
   async function handleContinueAsGuest() {
-    if (
-      isLoading ||
-      guestLoading
-    ) {
+    if (isLoading || guestLoading) {
       return;
     }
 
     try {
       setGuestLoading(true);
-
       setErrors({});
-
       await continueAsGuest();
     } catch (error) {
-      console.error(
-        'Guest login failed:',
-        error
-      );
-
+      console.error('Guest login failed:', error);
       Alert.alert(
         'Guest Access Failed',
         'SafeHer could not continue as a guest. Please try again.'
@@ -126,395 +105,223 @@ export default function LoginScreen() {
     }
   }
 
-  const formDisabled =
-    isLoading ||
-    guestLoading;
+  const formDisabled = isLoading || guestLoading;
 
   return (
-    <SafeAreaView
-      style={
-        styles.safeArea
-      }
-    >
+    <SafeAreaView style={styles.safeArea}>
       <KeyboardAvoidingView
-        style={
-          styles.keyboardView
-        }
-        behavior={
-          Platform.OS === 'ios'
-            ? 'padding'
-            : undefined
-        }
+        style={styles.keyboardView}
+        behavior={Platform.OS === 'ios' ? 'padding' : undefined}
       >
         <ScrollView
-          contentContainerStyle={
-            styles.scrollContent
-          }
+          contentContainerStyle={styles.scrollContent}
           keyboardShouldPersistTaps="handled"
-          showsVerticalScrollIndicator={
-            false
-          }
+          showsVerticalScrollIndicator={false}
         >
-          <View
-            style={
-              styles.brandContainer
-            }
-          >
-            <View
-              style={styles.logo}
-            >
-              <Ionicons
-                name="shield-checkmark"
-                size={42}
-                color="#FFFFFF"
-              />
+          {/* ---------- Brand / Header ---------- */}
+          <View style={styles.brandContainer}>
+            <View style={styles.logoRing}>
+              <View style={styles.logo}>
+                <Ionicons
+                  name="shield-checkmark"
+                  size={38}
+                  color="#FFFFFF"
+                />
+              </View>
             </View>
 
-            <Text
-              style={
-                styles.brandName
-              }
-            >
-              SafeHer
-            </Text>
+            <Text style={styles.brandName}>SafeHer</Text>
+            <Text style={styles.heading}>Welcome back</Text>
 
-            <Text
-              style={styles.heading}
-            >
-              Welcome back
-            </Text>
-
-            <Text
-              style={
-                styles.description
-              }
-            >
+            <Text style={styles.description}>
               Log in to continue to your SafeHer account.
             </Text>
           </View>
 
+          {/* ---------- General error ---------- */}
           {errors.general ? (
-            <View
-              style={
-                styles.generalErrorContainer
-              }
-            >
-              <Ionicons
-                name="alert-circle-outline"
-                size={20}
-                color="#B42318"
-              />
-
-              <Text
-                style={
-                  styles.generalErrorText
-                }
-              >
+            <View style={styles.generalErrorContainer}>
+              <View style={styles.errorIconWrap}>
+                <Ionicons
+                  name="alert-circle-outline"
+                  size={18}
+                  color="#B42318"
+                />
+              </View>
+              <Text style={styles.generalErrorText}>
                 {errors.general}
               </Text>
             </View>
           ) : null}
 
-          <View
-            style={styles.form}
-          >
-            <Text
-              style={styles.label}
-            >
-              Email address
-            </Text>
+          {/* ---------- Form ---------- */}
+          <View style={styles.form}>
+            <Text style={styles.label}>Email address</Text>
 
             <View
               style={[
                 styles.inputContainer,
-                errors.email &&
-                  styles.inputContainerError,
+                errors.email && styles.inputContainerError,
               ]}
             >
-              <Ionicons
-                name="mail-outline"
-                size={20}
-                color="#667085"
-              />
+              <Ionicons name="mail-outline" size={19} color="#667085" />
 
               <TextInput
                 value={email}
-                onChangeText={(
-                  value
-                ) => {
+                onChangeText={value => {
                   setEmail(value);
-
-                  setErrors(
-                    current => ({
-                      ...current,
-                      email:
-                        undefined,
-                      general:
-                        undefined,
-                    })
-                  );
+                  setErrors(current => ({
+                    ...current,
+                    email: undefined,
+                    general: undefined,
+                  }));
                 }}
-                style={
-                  styles.input
-                }
+                style={styles.input}
                 placeholder="Enter your email address"
                 placeholderTextColor="#98A2B3"
                 keyboardType="email-address"
                 autoCapitalize="none"
-                autoCorrect={
-                  false
-                }
-                editable={
-                  !formDisabled
-                }
+                autoCorrect={false}
+                editable={!formDisabled}
                 returnKeyType="next"
               />
             </View>
 
             {errors.email ? (
-              <Text
-                style={
-                  styles.fieldError
-                }
-              >
-                {errors.email}
-              </Text>
+              <Text style={styles.fieldError}>{errors.email}</Text>
             ) : null}
 
-            <Text
-              style={styles.label}
-            >
-              Password
-            </Text>
+            <Text style={styles.label}>Password</Text>
 
             <View
               style={[
                 styles.inputContainer,
-                errors.password &&
-                  styles.inputContainerError,
+                errors.password && styles.inputContainerError,
               ]}
             >
               <Ionicons
                 name="lock-closed-outline"
-                size={20}
+                size={19}
                 color="#667085"
               />
 
               <TextInput
                 value={password}
-                onChangeText={(
-                  value
-                ) => {
-                  setPassword(
-                    value
-                  );
-
-                  setErrors(
-                    current => ({
-                      ...current,
-                      password:
-                        undefined,
-                      general:
-                        undefined,
-                    })
-                  );
+                onChangeText={value => {
+                  setPassword(value);
+                  setErrors(current => ({
+                    ...current,
+                    password: undefined,
+                    general: undefined,
+                  }));
                 }}
-                style={
-                  styles.input
-                }
+                style={styles.input}
                 placeholder="Enter your password"
                 placeholderTextColor="#98A2B3"
-                secureTextEntry={
-                  !passwordVisible
-                }
+                secureTextEntry={!passwordVisible}
                 autoCapitalize="none"
-                autoCorrect={
-                  false
-                }
-                editable={
-                  !formDisabled
-                }
+                autoCorrect={false}
+                editable={!formDisabled}
                 returnKeyType="done"
-                onSubmitEditing={
-                  handleLogin
-                }
+                onSubmitEditing={handleLogin}
               />
 
               <Pressable
                 onPress={() =>
-                  setPasswordVisible(
-                    current =>
-                      !current
-                  )
+                  setPasswordVisible(current => !current)
                 }
                 hitSlop={10}
-                disabled={
-                  formDisabled
-                }
+                disabled={formDisabled}
                 accessibilityRole="button"
                 accessibilityLabel={
-                  passwordVisible
-                    ? 'Hide password'
-                    : 'Show password'
+                  passwordVisible ? 'Hide password' : 'Show password'
                 }
               >
                 <Ionicons
                   name={
-                    passwordVisible
-                      ? 'eye-off-outline'
-                      : 'eye-outline'
+                    passwordVisible ? 'eye-off-outline' : 'eye-outline'
                   }
-                  size={22}
+                  size={21}
                   color="#667085"
                 />
               </Pressable>
             </View>
 
             {errors.password ? (
-              <Text
-                style={
-                  styles.fieldError
-                }
-              >
-                {errors.password}
-              </Text>
+              <Text style={styles.fieldError}>{errors.password}</Text>
             ) : null}
 
+            {/* ---------- Primary button ---------- */}
             <Pressable
-              style={({
-                pressed,
-              }) => [
+              style={({ pressed }) => [
                 styles.primaryButton,
-                pressed &&
-                  styles.buttonPressed,
-                formDisabled &&
-                  styles.buttonDisabled,
+                pressed && styles.buttonPressed,
+                formDisabled && styles.buttonDisabled,
               ]}
-              onPress={
-                handleLogin
-              }
-              disabled={
-                formDisabled
-              }
+              onPress={handleLogin}
+              disabled={formDisabled}
             >
               {isLoading ? (
-                <View
-                  style={
-                    styles.loadingContent
-                  }
-                >
-                  <ActivityIndicator
-                    color="#FFFFFF"
-                  />
-
-                  <Text
-                    style={
-                      styles.primaryButtonText
-                    }
-                  >
+                <View style={styles.loadingContent}>
+                  <ActivityIndicator color="#FFFFFF" />
+                  <Text style={styles.primaryButtonText}>
                     Logging in...
                   </Text>
                 </View>
               ) : (
-                <Text
-                  style={
-                    styles.primaryButtonText
-                  }
-                >
-                  Log In
-                </Text>
+                <View style={styles.loadingContent}>
+                  <Ionicons
+                    name="log-in-outline"
+                    size={19}
+                    color="#FFFFFF"
+                  />
+                  <Text style={styles.primaryButtonText}>Log In</Text>
+                </View>
               )}
             </Pressable>
 
+            {/* ---------- Guest button ---------- */}
             <Pressable
-              style={({
-                pressed,
-              }) => [
+              style={({ pressed }) => [
                 styles.guestButton,
-                pressed &&
-                  styles.guestButtonPressed,
-                formDisabled &&
-                  styles.guestButtonDisabled,
+                pressed && styles.guestButtonPressed,
+                formDisabled && styles.guestButtonDisabled,
               ]}
-              onPress={
-                handleContinueAsGuest
-              }
-              disabled={
-                formDisabled
-              }
+              onPress={handleContinueAsGuest}
+              disabled={formDisabled}
             >
               {guestLoading ? (
-                <View
-                  style={
-                    styles.loadingContent
-                  }
-                >
-                  <ActivityIndicator
-                    color="#A92F62"
-                  />
-
-                  <Text
-                    style={
-                      styles.guestButtonText
-                    }
-                  >
+                <View style={styles.loadingContent}>
+                  <ActivityIndicator color="#A92F62" />
+                  <Text style={styles.guestButtonText}>
                     Continuing...
                   </Text>
                 </View>
               ) : (
-                <View
-                  style={
-                    styles.guestButtonContent
-                  }
-                >
+                <View style={styles.guestButtonContent}>
                   <Ionicons
                     name="person-outline"
-                    size={20}
+                    size={19}
                     color="#A92F62"
                   />
-
-                  <Text
-                    style={
-                      styles.guestButtonText
-                    }
-                  >
+                  <Text style={styles.guestButtonText}>
                     Continue as Guest
                   </Text>
                 </View>
               )}
             </Pressable>
 
-            <View
-              style={
-                styles.footerRow
-              }
-            >
-              <Text
-                style={
-                  styles.footerText
-                }
-              >
+            {/* ---------- Footer ---------- */}
+            <View style={styles.footerRow}>
+              <Text style={styles.footerText}>
                 Don&apos;t have an account?
               </Text>
 
               <Pressable
-                onPress={() =>
-                  router.replace(
-                    '/register'
-                  )
-                }
-                disabled={
-                  formDisabled
-                }
+                onPress={() => router.replace('/register')}
+                disabled={formDisabled}
               >
-                <Text
-                  style={
-                    styles.linkText
-                  }
-                >
-                  {' '}
-                  Create account
-                </Text>
+                <Text style={styles.linkText}> Create account</Text>
               </Pressable>
             </View>
           </View>
@@ -524,210 +331,237 @@ export default function LoginScreen() {
   );
 }
 
-const styles =
-  StyleSheet.create({
-    safeArea: {
-      flex: 1,
-      backgroundColor:
-        '#FFF8FB',
-    },
+const styles = StyleSheet.create({
+  safeArea: {
+    flex: 1,
+    backgroundColor: '#FFF8FB',
+  },
 
-    keyboardView: {
-      flex: 1,
-    },
+  keyboardView: {
+    flex: 1,
+  },
 
-    scrollContent: {
-      flexGrow: 1,
-      justifyContent:
-        'center',
-      paddingHorizontal: 24,
-      paddingVertical: 32,
-    },
+  scrollContent: {
+    flexGrow: 1,
+    justifyContent: 'center',
+    paddingHorizontal: 24,
+    paddingVertical: 32,
+  },
 
-    brandContainer: {
-      alignItems: 'center',
-      marginBottom: 34,
-    },
+  /* ---------- Brand ---------- */
+  brandContainer: {
+    alignItems: 'center',
+    marginBottom: 34,
+  },
 
-    logo: {
-      width: 76,
-      height: 76,
-      borderRadius: 38,
-      alignItems: 'center',
-      justifyContent:
-        'center',
-      backgroundColor:
-        '#C43D74',
-      marginBottom: 14,
-    },
+  logoRing: {
+    padding: 6,
+    borderRadius: 50,
+    backgroundColor: '#FCE8EE',
+    marginBottom: 14,
+  },
 
-    brandName: {
-      color: '#A92F62',
-      fontSize: 23,
-      fontWeight: '800',
-      marginBottom: 28,
-    },
+  logo: {
+    width: 76,
+    height: 76,
+    borderRadius: 38,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: '#C43D74',
+    shadowColor: '#C43D74',
+    shadowOffset: { width: 0, height: 6 },
+    shadowOpacity: 0.35,
+    shadowRadius: 12,
+    elevation: 5,
+  },
 
-    heading: {
-      color: '#24151C',
-      fontSize: 30,
-      fontWeight: '800',
-      textAlign: 'center',
-    },
+  brandName: {
+    color: '#A92F62',
+    fontSize: 22,
+    fontWeight: '800',
+    marginBottom: 26,
+    letterSpacing: 0.3,
+  },
 
-    description: {
-      color: '#667085',
-      fontSize: 15,
-      lineHeight: 22,
-      textAlign: 'center',
-      marginTop: 8,
-    },
+  heading: {
+    color: '#24151C',
+    fontSize: 28,
+    fontWeight: '900',
+    textAlign: 'center',
+    letterSpacing: -0.4,
+  },
 
-    generalErrorContainer: {
-      flexDirection: 'row',
-      alignItems:
-        'flex-start',
-      gap: 8,
-      borderWidth: 1,
-      borderColor: '#FDA29B',
-      borderRadius: 12,
-      backgroundColor:
-        '#FEF3F2',
-      padding: 12,
-      marginBottom: 20,
-    },
+  description: {
+    color: '#667085',
+    fontSize: 14,
+    lineHeight: 21,
+    textAlign: 'center',
+    marginTop: 8,
+    maxWidth: 320,
+  },
 
-    generalErrorText: {
-      flex: 1,
-      color: '#B42318',
-      fontSize: 14,
-      lineHeight: 20,
-    },
+  /* ---------- General error ---------- */
+  generalErrorContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+    borderWidth: 1,
+    borderColor: '#FDA29B',
+    borderRadius: 14,
+    backgroundColor: '#FEF3F2',
+    padding: 12,
+    marginBottom: 20,
+  },
 
-    form: {
-      width: '100%',
-    },
+  errorIconWrap: {
+    width: 32,
+    height: 32,
+    borderRadius: 10,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: '#FFFFFF',
+  },
 
-    label: {
-      color: '#344054',
-      fontSize: 14,
-      fontWeight: '600',
-      marginBottom: 7,
-    },
+  generalErrorText: {
+    flex: 1,
+    color: '#B42318',
+    fontSize: 13,
+    lineHeight: 19,
+    fontWeight: '600',
+  },
 
-    inputContainer: {
-      minHeight: 54,
-      flexDirection: 'row',
-      alignItems: 'center',
-      gap: 10,
-      borderWidth: 1,
-      borderColor: '#D0D5DD',
-      borderRadius: 12,
-      backgroundColor:
-        '#FFFFFF',
-      paddingHorizontal: 14,
-    },
+  /* ---------- Form ---------- */
+  form: {
+    width: '100%',
+  },
 
-    inputContainerError: {
-      borderColor: '#F04438',
-    },
+  label: {
+    color: '#344054',
+    fontSize: 13,
+    fontWeight: '700',
+    marginBottom: 7,
+    letterSpacing: 0.1,
+  },
 
-    input: {
-      flex: 1,
-      color: '#101828',
-      fontSize: 16,
-      paddingVertical: 14,
-    },
+  inputContainer: {
+    minHeight: 56,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+    borderWidth: 1,
+    borderColor: '#D0D5DD',
+    borderRadius: 14,
+    backgroundColor: '#FFFFFF',
+    paddingHorizontal: 14,
+  },
 
-    fieldError: {
-      color: '#D92D20',
-      fontSize: 13,
-      marginTop: 5,
-      marginBottom: 14,
-    },
+  inputContainerError: {
+    borderColor: '#F04438',
+  },
 
-    primaryButton: {
-      minHeight: 54,
-      alignItems: 'center',
-      justifyContent:
-        'center',
-      borderRadius: 12,
-      backgroundColor:
-        '#C43D74',
-      marginTop: 26,
-    },
+  input: {
+    flex: 1,
+    color: '#101828',
+    fontSize: 15,
+    paddingVertical: 15,
+  },
 
-    loadingContent: {
-      flexDirection: 'row',
-      alignItems: 'center',
-      gap: 10,
-    },
+  fieldError: {
+    color: '#D92D20',
+    fontSize: 12.5,
+    marginTop: 6,
+    marginBottom: 14,
+    fontWeight: '600',
+  },
 
-    primaryButtonText: {
-      color: '#FFFFFF',
-      fontSize: 16,
-      fontWeight: '700',
-    },
+  /* ---------- Buttons ---------- */
+  primaryButton: {
+    minHeight: 56,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderRadius: 14,
+    backgroundColor: '#C43D74',
+    marginTop: 26,
+    shadowColor: '#C43D74',
+    shadowOffset: { width: 0, height: 6 },
+    shadowOpacity: 0.28,
+    shadowRadius: 12,
+    elevation: 4,
+  },
 
-    buttonPressed: {
-      opacity: 0.85,
-    },
+  loadingContent: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+  },
 
-    buttonDisabled: {
-      opacity: 0.65,
-    },
+  primaryButtonText: {
+    color: '#FFFFFF',
+    fontSize: 15.5,
+    fontWeight: '800',
+    letterSpacing: 0.3,
+  },
 
-    guestButton: {
-      minHeight: 54,
-      marginTop: 14,
-      paddingHorizontal: 20,
-      borderWidth: 1,
-      borderColor: '#C43D74',
-      borderRadius: 12,
-      backgroundColor:
-        '#FFFFFF',
-      alignItems: 'center',
-      justifyContent:
-        'center',
-    },
+  buttonPressed: {
+    opacity: 0.88,
+  },
 
-    guestButtonContent: {
-      flexDirection: 'row',
-      alignItems: 'center',
-      gap: 8,
-    },
+  buttonDisabled: {
+    opacity: 0.65,
+    shadowOpacity: 0,
+    elevation: 0,
+  },
 
-    guestButtonText: {
-      color: '#A92F62',
-      fontSize: 16,
-      fontWeight: '700',
-    },
+  /* ---------- Guest button ---------- */
+  guestButton: {
+    minHeight: 56,
+    marginTop: 14,
+    paddingHorizontal: 20,
+    borderWidth: 1.5,
+    borderColor: '#C43D74',
+    borderRadius: 14,
+    backgroundColor: '#FFFFFF',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
 
-    guestButtonPressed: {
-      backgroundColor:
-        '#FFF1F6',
-    },
+  guestButtonContent: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
 
-    guestButtonDisabled: {
-      opacity: 0.65,
-    },
+  guestButtonText: {
+    color: '#A92F62',
+    fontSize: 15,
+    fontWeight: '800',
+    letterSpacing: 0.2,
+  },
 
-    footerRow: {
-      flexDirection: 'row',
-      justifyContent:
-        'center',
-      alignItems: 'center',
-      marginTop: 24,
-    },
+  guestButtonPressed: {
+    backgroundColor: '#FFF1F6',
+  },
 
-    footerText: {
-      color: '#667085',
-      fontSize: 14,
-    },
+  guestButtonDisabled: {
+    opacity: 0.65,
+  },
 
-    linkText: {
-      color: '#A92F62',
-      fontSize: 14,
-      fontWeight: '700',
-    },
-  });
+  /* ---------- Footer ---------- */
+  footerRow: {
+    flexDirection: 'row',
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginTop: 26,
+  },
+
+  footerText: {
+    color: '#667085',
+    fontSize: 13.5,
+  },
+
+  linkText: {
+    color: '#A92F62',
+    fontSize: 13.5,
+    fontWeight: '800',
+  },
+});
